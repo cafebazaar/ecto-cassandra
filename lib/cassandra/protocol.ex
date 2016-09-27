@@ -24,12 +24,11 @@ defmodule Cassandra.Protocol do
     |> send_request(port)
   end
 
-  defp send_request(frame = %Frame{}, port) do
-    IO.inspect {frame, port}
+  def send_request(frame = %Frame{}, port) do
     TCP.send(port, Frame.encode(frame))
   end
 
-  defp receive_responce(port, timeout \\ 5000) do
+  def receive_responce(port, timeout \\ 5000) do
     receive do
       {:tcp, ^port, binary} ->
         IO.inspect binary

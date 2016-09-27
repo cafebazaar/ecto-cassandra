@@ -2,7 +2,11 @@ defmodule Cassandra.Request do
   alias Cassandra.Frame
 
   def startup do
-    request(:STARTUP, Frame.map(%{"CQL_VERSION" => "3.0.0"}))
+    request(:STARTUP, Frame.Encoder.string_map(%{"CQL_VERSION" => "3.0.0"}))
+  end
+
+  def options do
+    request(:OPTIONS)
   end
 
   defp request(opration, body \\ <<>>, stream \\ 0, flags \\ 0) do
