@@ -1,23 +1,48 @@
 defmodule Cassandra.Frame.Encoder do
-
   alias Cassandra.Frame
+  alias Cassandra.Frame.{Opration, Consistency, Query}
 
   def encode(f = %Frame{}) do
-    <<f.version::unsigned-integer-size(8),
-      f.flags::unsigned-integer-size(8),
-      f.stream::signed-integer-size(16),
-      Frame.codes[f.opration]::unsigned-integer-size(8),
-      byte_size(f.body)::unsigned-integer-size(32),
-      f.body::binary,
-    >>
+    Enum.join [
+      byte(f.version),
+      byte(f.flags),
+      short(f.stream),
+      opration(f.opration),
+      int(byte_size(f.body)),
+      f.body,
+    ]
+  end
+
+  def encode(q = %Query{}) do
+    Enum.join [
+      long_string(q.query),
+      consistency(q.consistency),
+      byte(q.flags),
+    ]
+  end
+
+  def byte(n) do
+    <<n::unsigned-integer-size(8)>>
+  end
+
+  def int(n) do
+    <<n::unsigned-integer-size(32)>>
+  end
+
+  def long(n) do
+    <<n::unsigned-integer-size(64)>>
+  end
+
+  def short(n) do
+    <<n::unsigned-integer-size(16)>>
   end
 
   def string(str) do
-    <<String.length(str)::unsigned-integer-size(16), str::binary>>
+    (str |> String.length |> short) <> <<str::binary>>
   end
 
   def long_string(str) do
-    <<String.length(str)::unsigned-integer-size(32), str::binary>>
+    (str |> String.length |> int) <> <<str::binary>>
   end
 
   def string_map(map) do
@@ -44,5 +69,13 @@ defmodule Cassandra.Frame.Encoder do
     map
     |> Enum.map(fn {k, v} -> {k, string_list(v)} end)
     |> string_map
+  end
+
+  def consistency(name) do
+    name |> Consistency.code |> short
+  end
+
+  def opration(name) do
+    name |> Opration.code |> byte
   end
 end

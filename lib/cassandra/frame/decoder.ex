@@ -1,5 +1,6 @@
 defmodule Cassandra.Frame.Decoder do
   alias Cassandra.Frame
+  alias Cassandra.Frame.{Opration, Consistency}
 
   def decode(<<
       version::unsigned-integer-size(8),
@@ -14,14 +15,17 @@ defmodule Cassandra.Frame.Decoder do
       version: version,
       flags: flags,
       stream: stream,
-      opration: Frame.names[opcode],
+      opration: opration(opcode),
       length: length,
       body: body,
     }
     case frame.opration do
+      :ERROR ->
+        {:ok, %{frame | body: error(frame.body)}}
+      :RESULT ->
+        {:ok, %{frame | body: result(frame.body)}}
       :SUPPORTED ->
-        {body, ""} = string_multimap(frame.body)
-        {:ok, %{frame | body: body}}
+        {:ok, %{frame | body: supported(body)}}
       _ ->
         {:ok, frame}
     end
@@ -71,5 +75,38 @@ defmodule Cassandra.Frame.Decoder do
 
   def string_multimap(binary) do
     binary |> short |> string_multimap
+  end
+
+  def opration(code) do
+    Opration.name(code)
+  end
+
+  def error(body) do
+    {code, rest} = int(body)
+    {message, ""} = string(rest)
+
+    %{code: code, message: message}
+  end
+
+  def result(body) do
+    {kind, rest} = int(body)
+    case kind do
+      0x01 -> void(rest)
+      0x02 -> rows(rest)
+      0x03 -> set_keyspace(rest)
+      0x04 -> prepared(rest)
+      0x05 -> schema_change(rest)
+    end
+  end
+
+  def void(_), do: %{}
+  def rows(rest), do: rest
+  def set_keyspace(rest), do: rest
+  def prepared(rest), do: rest
+  def schema_change(rest), do: rest
+
+  def supported(body) do
+    {body, ""} = string_multimap(body)
+    body
   end
 end
