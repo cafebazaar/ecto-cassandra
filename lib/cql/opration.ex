@@ -1,4 +1,6 @@
-defmodule Cassandra.Frame.Opration do
+defmodule CQL.Opration do
+  import CQL.Encoder
+
   @names %{
     0x00 => :ERROR,
     0x01 => :STARTUP,
@@ -37,11 +39,13 @@ defmodule Cassandra.Frame.Opration do
     :AUTH_SUCCESS   => 0x10,
   }
 
-  def name(code) do
+  def decode(code) do
     Map.fetch!(@names, code)
   end
 
-  def code(name) do
-    Map.fetch!(@codes, name)
+  def encode(name) do
+    @codes
+    |> Map.fetch!(name)
+    |> byte
   end
 end

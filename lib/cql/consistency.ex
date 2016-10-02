@@ -1,4 +1,6 @@
-defmodule Cassandra.Frame.Consistency do
+defmodule CQL.Consistency do
+  import CQL.Encoder
+
   @codes %{
     :ANY          => 0x00,
     :ONE          => 0x01,
@@ -13,7 +15,9 @@ defmodule Cassandra.Frame.Consistency do
     :LOCAL_ONE    => 0x0A,
   }
 
-  def code(name) do
-    Map.fetch!(@codes, name)
+  def encode(name) do
+    @codes
+    |> Map.fetch!(name)
+    |> short
   end
 end
