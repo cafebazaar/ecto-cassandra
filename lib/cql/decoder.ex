@@ -28,7 +28,9 @@ defmodule CQL.Decoder do
     buffer |> long |> string
   end
 
-  def uuid(<<uuid::binary-size(128), rest::binary>>), do: {uuid, rest}
+  def uuid(<<uuid::bitstring-size(128), rest::binary>>) do
+    {UUID.binary_to_string!(uuid), rest}
+  end
 
   def string_list({n, buffer}) do
     Enum.reduce 1..n, {[], buffer}, fn(_, {list, rest}) ->

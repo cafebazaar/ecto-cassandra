@@ -37,7 +37,7 @@ defmodule CQL.Encoder do
   end
 
   def uuid(str) do
-    <<str::size(16)>>
+    UUID.string_to_binary!(str)
   end
 
   def string_list(list) do
