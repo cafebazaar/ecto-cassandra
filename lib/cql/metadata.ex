@@ -6,80 +6,75 @@ defmodule CQL.MetaData do
   @has_more_pages 0x02
   @no_metadata    0x04
 
-  def decode(binary, pk_indices \\ false) do
-    {flags,         x} = int(binary)
-    {columns_count, x} = int(x)
-    {pk_indices,    x} = run_when(&pk_indices/1, x, pk_indices)
+  def decode(buffer, pk_indices \\ false) do
+    {data, buffer} = unpack buffer,
+      flags:         &int/1,
+      columns_count: &int/1,
+      pk_indices:    {&pk_indices/1, when: pk_indices},
+      paging_state:  {&bytes/1, when: @has_more_pages}
 
-    cols_specs = fn binary ->
-      {global_spec, x} = run_when_matches(&global_spec/1, binary, @global_spec, flags)
-      ntimes(columns_count, column_spec(global_spec), x)
+    {specs, buffer} = unpack buffer,
+      columns_specs: {columns_specs(data), unless: matches(@no_metadata, data.flags)}
+
+    {Map.merge(data, specs), buffer}
+  end
+
+  def pk_indices(buffer) do
+    {pk_count, buffer} = int(buffer)
+    ntimes(pk_count, &short/1, buffer)
+  end
+
+  def global_spec(buffer) do
+    unpack buffer,
+      keyspace: &string/1,
+      table:    &string/1
+  end
+
+  def columns_specs(data) do
+    fn buffer ->
+      {global, buffer} = unpack buffer,
+        spec: {&global_spec/1, when: matches(@global_spec, data.flags)}
+      ntimes(data.columns_count, column_spec(global.spec), buffer)
     end
-
-    {paging_state,  x} = run_when_matches(&bytes/1, x, @has_more_pages, flags)
-    {columns_specs, x} = run_when(cols_specs, x, !matches(@no_metadata, flags))
-
-    metadata = %{
-      flags: flags,
-      columns_count: columns_count,
-      pk_indices: pk_indices,
-      paging_state: paging_state,
-      columns_specs: columns_specs,
-    }
-
-    {metadata, x}
-  end
-
-  def pk_indices(binary) do
-    {pk_count, x} = int(binary)
-    ntimes(pk_count, &short/1, x)
-  end
-
-  def global_spec(binary) do
-    {keyspace, x} = string(binary)
-    {table,   x} = string(x)
-
-    {{keyspace, table}, x}
   end
 
   def column_spec(nil) do
-    fn binary ->
-      {keyspace, x} = string(binary)
-      {table,    x} = string(x)
-      {name,     x} = string(x)
-      {type,     x} = option(x)
-
-      {{keyspace, table, name, type}, x}
+    fn buffer ->
+      unpack buffer,
+        keyspace: &string/1,
+        table:    &string/1,
+        name:     &string/1,
+        type:     &option/1
     end
   end
 
-  def column_spec({keyspace, table}) do
-    fn binary ->
-      {name, x} = string(binary)
-      {type, x} = option(x)
-
-      {{keyspace, table, name, type}, x}
+  def column_spec(global) do
+    fn buffer ->
+      {spec, buffer} = unpack buffer,
+        name:     &string/1,
+        type:     &option/1
+      {Map.merge(global, spec), buffer}
     end
   end
 
-  def option(binary) do
-    {id,    x} = short(binary)
-    {value, x} = case id do
-      0 -> string(x)
-      0x20 -> option(x)
-      0x21 -> option_pair(x)
-      0x22 -> option(x)
+  def option(buffer) do
+    {id,    buffer} = short(buffer)
+    {value, buffer} = case id do
+      0x00 -> string(buffer)
+      0x20 -> option(buffer)
+      0x21 -> option_pair(buffer)
+      0x22 -> option(buffer)
       #TODO: complete me
-      _ -> {nil, x}
+      _    -> {nil, buffer}
     end
 
-    {{id, value}, x}
+    {{id, value}, buffer}
   end
 
-  def option_pair(binary) do
-    {option1, x} = option(binary)
-    {option2, x} = option(x)
+  def option_pair(buffer) do
+    {option1, buffer} = option(buffer)
+    {option2, buffer} = option(buffer)
 
-    {{option1, option2}, x}
+    {{option1, option2}, buffer}
   end
 end

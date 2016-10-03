@@ -2,9 +2,7 @@ defmodule CQL.Result.Rows do
   import CQL.Decoder
 
   defstruct [
-    :metadata,
-    :rows_count,
-    :rows_content,
+    :data,
   ]
 
   @ascii     0x01
@@ -29,16 +27,14 @@ defmodule CQL.Result.Rows do
   @tuple     0x31
 
 
-  def decode(binary) do
-    {metadata,      x} = CQL.MetaData.decode(binary)
-    {rows_count,    x} = int(x)
-    {rows_content, ""} = ntimes(rows_count, row_content(metadata), x)
+  def decode(buffer) do
+    {data, buffer} = unpack buffer,
+      metadata:     &CQL.MetaData.decode/1,
+      rows_count:   &int/1
 
-    %__MODULE__{
-      metadata: metadata,
-      rows_count: rows_count,
-      rows_content: rows_content,
-    }
+    {rows_content, ""} = ntimes(data.rows_count, row_content(data.metadata), buffer)
+
+    %__MODULE__{data: rows_content}
   end
 
   def row_content(metadata) do
@@ -50,14 +46,8 @@ defmodule CQL.Result.Rows do
 
   def parse(row_content, columns_specs) do
     columns_specs
+    |> Enum.map(&Map.get(&1, :type))
     |> Enum.zip(row_content)
-    |> Enum.map(&parse/1)
-  end
-
-  def parse({{_,_,_,{@varchar, nil}}, <<data::binary>>}), do: data
-  def parse({{_,_,_,{@int, nil}}, data}) do
-    len = bit_size(data)
-    <<n::integer-size(len)>> = data
-    n
+    |> Enum.map(&CQL.DataTypes.decode/1)
   end
 end

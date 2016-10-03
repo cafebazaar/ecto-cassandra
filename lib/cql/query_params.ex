@@ -55,7 +55,7 @@ defmodule CQL.QueryParams do
     n = Enum.count(list)
     binary =
       list
-      |> Enum.map(&CQL.Types.encode/1)
+      |> Enum.map(&CQL.DataTypes.encode/1)
       |> Enum.join
     short(n) <> <<binary::binary>>
   end
@@ -64,7 +64,7 @@ defmodule CQL.QueryParams do
     n = Enum.count(map)
     binary =
       map
-      |> Enum.map(fn {k, v} -> string(to_string(k)) <> CQL.Types.encode(v) end)
+      |> Enum.map(fn {k, v} -> string(to_string(k)) <> CQL.DataTypes.encode(v) end)
       |> Enum.join
     short(n) <> <<binary::binary>>
   end

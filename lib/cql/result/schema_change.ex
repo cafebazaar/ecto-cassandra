@@ -7,21 +7,22 @@ defmodule CQL.Result.SchemaChange do
     :options,
   ]
 
-  def decode(binary) do
-    {change_type, x} = string(binary)
-    {target,      x} = string(x)
-    {keyspace,    x} = run_when(&string/1, x, target != "KEYSPACE")
-    {name,       ""} = string(x)
+  def decode(buffer) do
+    {data, ""} = unpack buffer,
+      change_type: &string/1,
+      target:      &string/1,
+      keyspace:    {&string/1, :target, &(&1 != "KEYSPACE")},
+      name:        &string/1
 
-    options = if target != "KEYSPACE" do
-      {keyspace, name}
+    options = if data.target != "KEYSPACE" do
+      {data.keyspace, data.name}
     else
-      name
+      data.name
     end
 
     %__MODULE__{
-      change_type: change_type,
-      target: target,
+      change_type: data.change_type,
+      target: data.target,
       options: options,
     }
   end
