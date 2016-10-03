@@ -1,9 +1,13 @@
 defmodule CQL.DataTypes.Encoder do
   import CQL.Encoder
 
+  def encode(value, type) when is_integer(type) do
+    type
+    |> CQL.DataTypes.kind
+  end
+
   def encode(value, type) do
     type
-    #|> CQL.DataTypes.kind
     |> parts(value)
     |> Enum.join
   end
@@ -19,9 +23,9 @@ defmodule CQL.DataTypes.Encoder do
   defp parts(:float,     value), do: [int(4), float(value)]
   defp parts(:int,       value), do: [int(4), int(value)]
   defp parts(:timestamp, value), do: [int(8), long(value)]
-  defp parts(:text,      value), do: [string(value)]
+  defp parts(:text,      value), do: [long_string(value)]
   defp parts(:uuid,      value), do: [int(16), uuid(value)]
-  defp parts(:varchar,   value), do: [string(value)]
+  defp parts(:varchar,   value), do: [long_string(value)]
   defp parts(:varint,    value), do: [value] #TODO
   defp parts(:inet,      value), do: [value] #TODO
   defp parts(:date,      value), do: [value] #TODO

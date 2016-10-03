@@ -9,15 +9,11 @@ defmodule CQL.Result.Prepared do
     :result_metadata,
   ]
 
-  def decode(binary) do
-    {id,              x} = short_bytes(binary)
-    {metadata,        x} = MetaData.decode(x, true)
-    {result_metadata, x} = run_when(&MetaData.decode/1, x, !is_nil(metadata.columns_specs))
+  def decode(buffer) do
+    {data, _rest} = unpack buffer,
+      id:              &short_bytes/1,
+      metadata:        &MetaData.decode(&1, true)
 
-    %__MODULE__{
-      id: id,
-      metadata: metadata,
-      result_metadata: result_metadata,
-    }
+    struct(__MODULE__, data)
   end
 end

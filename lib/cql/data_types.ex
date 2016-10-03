@@ -25,7 +25,15 @@ defmodule CQL.DataTypes do
   def kind(type) do
     Map.fetch!(@kinds, type)
   end
-  
+
   defdelegate encode(value, type), to: CQL.DataTypes.Encoder
-  defdelegate decode(value, type), to: CQL.DataTypes.Encoder
+  defdelegate decode(value, type), to: CQL.DataTypes.Decoder
+
+  def decode({{type, nil}, value}), do: decode(value, type)
+  def decode({type, value}),        do: decode(value, type)
+
+  def encode(value) when is_integer(value),   do: encode(value, :int)
+  def encode(value) when is_float(value),     do: encode(value, :double)
+  def encode(value) when is_bitstring(value), do: encode(value, :varchar)
+  def encode(value) when is_boolean(value),   do: encode(value, :boolean)
 end

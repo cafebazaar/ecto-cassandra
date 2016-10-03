@@ -5,7 +5,6 @@ defmodule CQL.Result do
 
   def decode(%CQL.Frame{body: body}) do
     {kind, rest} = int(body)
-    IO.inspect kind
     case kind do
       0x01 -> Result.Void.decode(rest)
       0x02 -> Result.Rows.decode(rest)
