@@ -5,13 +5,13 @@ defmodule CQL.QueryParams do
   alias CQL.Consistency
 
   defstruct [
-    :consistency,
-    :flags,
-    :values,
-    :result_page_size,
-    :paging_state,
-    :serial_consistency,
-    :timestamp,
+    consistency: :ONE,
+    flags: 0,
+    values: nil,
+    result_page_size: nil,
+    paging_state: nil,
+    serial_consistency: nil,
+    timestamp: nil,
   ]
 
   @flags %{
@@ -64,7 +64,7 @@ defmodule CQL.QueryParams do
     n = Enum.count(map)
     binary =
       map
-      |> Enum.map(fn {k, v} -> string(k) <> CQL.Types.encode(v) end)
+      |> Enum.map(fn {k, v} -> string(to_string(k)) <> CQL.Types.encode(v) end)
       |> Enum.join
     short(n) <> <<binary::binary>>
   end
