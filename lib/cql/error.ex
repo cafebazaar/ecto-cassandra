@@ -6,6 +6,8 @@ defmodule CQL.Error do
   def decode(%CQL.Frame{body: body}) do
     {code, rest} = int(body)
     {message, rest} = string(rest)
+    
+    # TODO: Parse content according to code
 
     %__MODULE__{code: code, message: message, content: rest}
   end

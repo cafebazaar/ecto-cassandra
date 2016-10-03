@@ -3,7 +3,15 @@ defmodule CQL.Encoder do
   def byte(n) do
     <<n::unsigned-integer-size(8)>>
   end
+  
+  def tinyint(n) do
+    <<n::unsigned-integer-size(8)>>
+  end
 
+  def short(n) do
+    <<n::unsigned-integer-size(16)>>
+  end
+  
   def int(n) do
     <<n::unsigned-integer-size(32)>>
   end
@@ -12,8 +20,12 @@ defmodule CQL.Encoder do
     <<n::unsigned-integer-size(64)>>
   end
 
-  def short(n) do
-    <<n::unsigned-integer-size(16)>>
+  def float(x) do
+    <<x::float-size(32)>>
+  end
+  
+  def double(x) do
+    <<x::float-size(64)>>
   end
 
   def string(str) do

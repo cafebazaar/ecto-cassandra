@@ -3,11 +3,17 @@ defmodule CQL.Decoder do
 
   def byte(<<n::unsigned-integer-size(8), rest::binary>>), do: {n, rest}
 
+  def tinyint(<<n::unsigned-integer-size(8), rest::binary>>), do: {n, rest}
+
+  def short(<<n::unsigned-integer-size(16), rest::binary>>), do: {n, rest}
+
   def int(<<n::signed-integer-size(32), rest::binary>>), do: {n, rest}
 
   def long(<<n::signed-integer-size(64), rest::binary>>), do: {n, rest}
 
-  def short(<<n::unsigned-integer-size(16), rest::binary>>), do: {n, rest}
+  def float(<<x::float-size(32), rest::binary>>), do: {x, rest}
+  
+  def double(<<x::float-size(64), rest::binary>>), do: {x, rest}
 
   def string({len, binary}) do
     <<str::binary-size(len), rest::binary>> = binary

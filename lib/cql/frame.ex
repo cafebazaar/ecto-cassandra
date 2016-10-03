@@ -1,15 +1,15 @@
 defmodule CQL.Frame do
+  import CQL.Encoder
+  alias CQL.Opration
+
   defstruct [
     version: 0x04,
     flags: 0x00,
     stream: 0,
     opration: 0,
     length: 0,
-    body: <<>>,
+    body: "",
   ]
-
-  import CQL.Encoder
-  alias CQL.Opration
 
   def encode(f = %__MODULE__{}) do
     Enum.join [
