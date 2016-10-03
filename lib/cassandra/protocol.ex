@@ -66,8 +66,12 @@ defmodule Cassandra.Protocol do
     send_request(%Startup{options: options}, socket)
   end
 
-  def q(query, socket) do
-    %Query{query: query} |> send_request(socket)
+  def run(socket, query) when is_bitstring(query) do
+    run(socket, %Query{query: query})
+  end
+
+  def run(socket, request) do
+    :ok = send_request(request, socket)
     receive_responce(socket)
   end
 
