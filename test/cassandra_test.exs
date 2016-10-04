@@ -22,7 +22,7 @@ defmodule CassandraTest do
         age int,
         address text,
         joined_at timestamp,
-        PRIMARY KEY (userid, joined_at)
+        PRIMARY KEY (userid)
       );
     """
     :ok
@@ -31,6 +31,7 @@ defmodule CassandraTest do
   setup do
     {:ok, %{socket: socket}} = connect([])
     run socket, "USE elixir_cql_test;"
+    run socket, "TRUNCATE users;"
     {:ok, %{socket: socket}}
   end
 
@@ -42,7 +43,7 @@ defmodule CassandraTest do
   test "INSERT", %{socket: socket} do
     assert %Void{} = run socket, """
       insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'fred smith', 20, 'US', toTimestamp(now()));
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
   end
 
@@ -86,10 +87,10 @@ defmodule CassandraTest do
   test "DELETE", %{socket: socket} do
     assert %Void{} = run socket, """
       insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'fred smith', 20, 'US', toTimestamp(now()));
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    user= run socket, "select * from users where name='fred smith' limit 1 ALLOW FILTERING"
+    user= run socket, "select * from users where name='john doe' limit 1 ALLOW FILTERING"
     user_id=
       user
       |> hd
@@ -102,5 +103,43 @@ defmodule CassandraTest do
         values: [{:uuid, user_id}],
       }
     }
+  end
+
+  test "UPDATE", %{socket: socket} do
+    assert %Void{} = run socket, """
+      insert into users (userid, name, age, address, joined_at)
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+    """
+
+    user= run socket, "select * from users where name='john doe' limit 1 ALLOW FILTERING"
+    user_id=
+      user
+      |> hd
+      |> Map.get("userid")
+
+    %{id: id} = run socket, %Prepare{query: """
+      update users
+        set age=?, address=?
+        where userid=?
+    """}
+
+    assert %Void{} = run socket, %Execute{
+      id: id,
+      params: %QueryParams{
+        values: [27, "UK", {:uuid, user_id}],
+      }
+    }
+
+    %{id: id} = run socket, %Prepare{
+      query: "select name,age from users where age=? and address=? ALLOW FILTERING"
+    }
+
+   rows = run socket, %Execute{
+      id: id,
+      params: %QueryParams{
+        values: [27, "UK"],
+      }
+    }
+    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
   end
 end
