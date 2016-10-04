@@ -82,4 +82,25 @@ defmodule CassandraTest do
     }
     assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
   end
+
+  test "DELETE", %{socket: socket} do
+    assert %Void{} = run socket, """
+      insert into users (userid, name, age, address, joined_at)
+        values (uuid(), 'fred smith', 20, 'US', toTimestamp(now()));
+    """
+
+    user= run socket, "select * from users where name='fred smith' limit 1 ALLOW FILTERING"
+    user_id=
+      user
+      |> hd
+      |> Map.get("userid")
+
+    %{id: id} = run socket, %Prepare{query: "delete from users where userid=?"}
+    assert %Void{} = run socket, %Execute{
+      id: id,
+      params: %QueryParams{
+        values: [{:uuid, user_id}],
+      }
+    }
+  end
 end
