@@ -72,14 +72,14 @@ defmodule Cassandra.Protocol do
 
   def run(socket, request) do
     :ok = send_request(request, socket)
-    receive_responce(socket)
+    receive_response(socket)
   end
 
   def send_request(request, socket) do
     TCP.send(socket, CQL.encode(request))
   end
 
-  def receive_responce(socket, timeout \\ 5000) do
+  def receive_response(socket, timeout \\ 5000) do
     receive do
       {:tcp, ^socket, binary} ->
         CQL.decode(binary)
@@ -97,7 +97,7 @@ defmodule Cassandra.Protocol do
   end
 
   defp receive_ready(socket) do
-    case receive_responce(socket) do
+    case receive_response(socket) do
       %Ready{} ->
         :ok
       %Error{code: code, message: message} ->
