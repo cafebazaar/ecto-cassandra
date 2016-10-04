@@ -32,6 +32,9 @@ defmodule CQL.DataTypes do
   def decode({{type, nil}, value}), do: decode(value, type)
   def decode({type, value}),        do: decode(value, type)
 
+  def encode({{type, nil}, value}), do: encode(value, type)
+  def encode({type, value}),        do: encode(value, type)
+
   def encode(value) when is_integer(value),   do: encode(value, :int)
   def encode(value) when is_float(value),     do: encode(value, :double)
   def encode(value) when is_bitstring(value), do: encode(value, :varchar)

@@ -2,57 +2,111 @@ defmodule CassandraTest do
   use ExUnit.Case
   doctest Cassandra
 
-  import Cassandra.Protocol, only: [run: 2, connect: 1]
-
-  alias CQL.{Options, Supported, Query, Prepare, Execute, QueryParams}
-  alias CQL.Result.{Void, Rows}
+  alias Cassandra.Client
+  alias CQL.Supported
+  alias CQL.Result.Void
 
   setup_all do
-    {:ok, %{socket: socket}} = connect([])
-    run socket, "drop keyspace elixir_cql_test;"
-    run socket, """
+    {:ok, client} = Client.start_link([])
+    Client.query(client, "drop keyspace elixir_cql_test;")
+    Client.query client, """
       create keyspace elixir_cql_test
         with replication = {'class':'SimpleStrategy','replication_factor':1};
     """
-    run socket, "USE elixir_cql_test;"
-    run socket, """
+    Client.query(client, "USE elixir_cql_test;")
+    Client.query client, """
       create table users (
         userid uuid,
         name varchar,
         age int,
         address text,
         joined_at timestamp,
-        PRIMARY KEY (userid, joined_at)
+        PRIMARY KEY (userid)
       );
     """
-    :ok
+    {:ok, %{client: client}}
   end
 
-  setup do
-    {:ok, %{socket: socket}} = connect([])
-    run socket, "USE elixir_cql_test;"
-    {:ok, %{socket: socket}}
+  setup %{client: client} do
+    Client.query(client, "TRUNCATE users;")
+    {:ok, %{client: client}}
   end
 
-  test "OPTIONS", %{socket: socket} do
-    assert %Supported{options: options} = run socket, %Options{}
+  test "OPTIONS", %{client: client} do
+    assert %Supported{options: options} = Client.options(client)
     assert ["CQL_VERSION", "COMPRESSION"] = Keyword.keys(options)
   end
 
-  test "INSERT", %{socket: socket} do
-    assert %Void{} = run socket, """
+  test "INSERT", %{client: client} do
+    assert %Void{} = Client.query client, """
       insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'fred smith', 20, 'US', toTimestamp(now()));
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
   end
 
-  test "INSERT SELECT", %{socket: socket} do
-    assert %Void{} = run socket, """
+  test "INSERT SELECT", %{client: client} do
+    assert %Void{} = Client.query client, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    rows = run socket, "select * from users;"
+    rows = Client.query(client, "select * from users;")
+    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+  end
+
+  test "PREPARE", %{client: client} do
+    %{id: id} = Client.prepare client, """
+      insert into users (userid, name, age, address, joined_at)
+        values (uuid(), ?, ?, ?, toTimestamp(now()));
+    """
+
+    assert %Void{} = Client.execute(client, id, ["john doe", 27, "UK"], consistency: :ONE)
+
+    %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
+
+    rows = Client.execute(client, id, [27, "UK"])
+    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+  end
+
+  test "DELETE", %{client: client} do
+    assert %Void{} = Client.query client, """
+      insert into users (userid, name, age, address, joined_at)
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+    """
+
+    user= Client.query(client, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    user_id=
+      user
+      |> hd
+      |> Map.get("userid")
+
+    %{id: id} = Client.prepare(client, "delete from users where userid=?")
+    assert %Void{} = Client.execute(client, id, [{:uuid, user_id}])
+  end
+
+  test "UPDATE", %{client: client} do
+    assert %Void{} = Client.query client, """
+      insert into users (userid, name, age, address, joined_at)
+        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+    """
+
+    user= Client.query(client, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    user_id=
+      user
+      |> hd
+      |> Map.get("userid")
+
+    %{id: id} = Client.prepare client, """
+      update users
+        set age=?, address=?
+        where userid=?
+    """
+
+    assert %Void{} = Client.execute(client, id, [27, "UK", {:uuid, user_id}])
+
+    %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
+
+    rows = Client.execute(client, id, [27, "UK"])
     assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
   end
 end
