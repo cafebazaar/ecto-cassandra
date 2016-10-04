@@ -34,7 +34,8 @@ defmodule CQL.MetaData do
     fn buffer ->
       {global, buffer} = unpack buffer,
         spec: {&global_spec/1, when: matches(@global_spec, data.flags)}
-      ntimes(data.columns_count, column_spec(global.spec), buffer)
+      global_spec = Map.get(global, :spec)
+      ntimes(data.columns_count, column_spec(global_spec), buffer)
     end
   end
 

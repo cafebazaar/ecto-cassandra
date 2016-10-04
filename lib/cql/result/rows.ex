@@ -22,7 +22,6 @@ defmodule CQL.Result.Rows do
   @udt       0x30
   @tuple     0x31
 
-
   def decode(buffer) do
     {data, buffer} = unpack buffer,
       metadata:     &CQL.MetaData.decode/1,

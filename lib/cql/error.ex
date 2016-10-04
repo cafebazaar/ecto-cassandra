@@ -3,12 +3,13 @@ defmodule CQL.Error do
 
   import CQL.Decoder
 
-  def decode(%CQL.Frame{body: body}) do
-    {code, rest} = int(body)
-    {message, rest} = string(rest)
-    
+  def decode(buffer) do
+    {error, rest} = unpack buffer,
+      code:    &int/1,
+      message: &string/1
+
     # TODO: Parse content according to code
 
-    %__MODULE__{code: code, message: message, content: rest}
+    %__MODULE__{code: error.code, message: error.message, content: rest}
   end
 end

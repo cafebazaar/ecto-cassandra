@@ -27,7 +27,6 @@ defmodule Cassandra.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps, do: [
-    {:db_connection, "~> 1.0.0-rc.5"},
     {:uuid, "~> 1.1"},
   ]
 end

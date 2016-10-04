@@ -1,7 +1,7 @@
 defmodule CQL.Ready do
   defstruct []
 
-  def decode(%CQL.Frame{}) do
+  def decode(_buffer) do
     %__MODULE__{}
   end
 end

@@ -2,8 +2,7 @@ defmodule CQL.DataTypes.Encoder do
   import CQL.Encoder
 
   def encode(value, type) when is_integer(type) do
-    type
-    |> CQL.DataTypes.kind
+    encode(value, CQL.DataTypes.kind(type))
   end
 
   def encode(value, type) do

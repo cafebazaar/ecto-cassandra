@@ -3,7 +3,7 @@ defmodule CQL.Supported do
 
   defstruct [options: %{}]
 
-  def decode(%CQL.Frame{body: body}) do
+  def decode(body) do
     {options, ""} = string_multimap(body)
 
     %__MODULE__{options: options}

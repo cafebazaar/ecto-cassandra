@@ -1,5 +1,5 @@
 defmodule CQL.Startup do
-  defstruct [:options]
+  defstruct [options: %{"CQL_VERSION" => "3.0.0"}]
 
   import CQL.Encoder
   alias CQL.{Request, Frame}
