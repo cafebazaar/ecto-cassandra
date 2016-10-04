@@ -60,7 +60,7 @@ defmodule CassandraTest do
         values (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert %Void{} = Client.execute(client, id, ["john doe", 27, "UK"], consistency: :ONE)
+    assert %Void{} = Client.execute(client, id, %{name: "john doe", address: "UK", age: 27}, consistency: :ONE)
 
     %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
 
@@ -108,5 +108,9 @@ defmodule CassandraTest do
 
     rows = Client.execute(client, id, [27, "UK"])
     assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+  end
+
+  test "ERROR", %{client: client} do
+    assert %CQL.Error{} = Client.query(client, "select * from some_table")
   end
 end
