@@ -4,6 +4,9 @@ defmodule CQL.Encoder do
     <<n::unsigned-integer-size(8)>>
   end
 
+  def boolean(false), do: byte(0)
+  def boolean(true),  do: byte(1)
+
   def tinyint(n) do
     <<n::unsigned-integer-size(8)>>
   end

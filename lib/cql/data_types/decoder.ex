@@ -25,9 +25,4 @@ defmodule CQL.DataTypes.Decoder do
   def decode(buffer, :time     ), do: long(buffer)
   def decode(buffer, :smallint ), do: short(buffer)
   def decode(buffer, :tinyint  ), do: tinyint(buffer)
-
-  defp boolean(buffer) do
-    {x, buffer} = byte(buffer)
-    {x == 1, buffer}
-  end
 end

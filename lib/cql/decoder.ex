@@ -3,6 +3,9 @@ defmodule CQL.Decoder do
 
   def byte(<<n::unsigned-integer-size(8), rest::binary>>), do: {n, rest}
 
+  def boolean(<<0::size(8), rest::binary>>), do: {false, rest}
+  def boolean(<<_::size(8), rest::binary>>), do: {true, rest}
+
   def tinyint(<<n::unsigned-integer-size(8), rest::binary>>), do: {n, rest}
 
   def short(<<n::unsigned-integer-size(16), rest::binary>>), do: {n, rest}
