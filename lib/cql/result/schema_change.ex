@@ -9,10 +9,10 @@ defmodule CQL.Result.SchemaChange do
 
   def decode(buffer) do
     {data, ""} = unpack buffer,
-      change_type: &string/1,
-      target:      &string/1,
-      keyspace:    {&string/1, :target, &(&1 != "KEYSPACE")},
-      name:        &string/1
+      change_type: :string,
+      target:      :string,
+      keyspace:    {:string, :target, &(&1 != "KEYSPACE")},
+      name:        :string
 
     options = if data.target != "KEYSPACE" do
       {data.keyspace, data.name}

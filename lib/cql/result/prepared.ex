@@ -11,8 +11,8 @@ defmodule CQL.Result.Prepared do
 
   def decode(buffer) do
     {data, _rest} = unpack buffer,
-      id:              &short_bytes/1,
-      metadata:        &MetaData.decode(&1, true)
+      id:       :short_bytes,
+      metadata: &MetaData.decode(&1, true)
 
     struct(__MODULE__, data)
   end

@@ -8,10 +8,10 @@ defmodule CQL.MetaData do
 
   def decode(buffer, pk_indices \\ false) do
     {data, buffer} = unpack buffer,
-      flags:         &int/1,
-      columns_count: &int/1,
+      flags:         :int,
+      columns_count: :int,
       pk_indices:    {&pk_indices/1, when: pk_indices},
-      paging_state:  {&bytes/1, when: @has_more_pages}
+      paging_state:  {:bytes, when: @has_more_pages}
 
     {specs, buffer} = unpack buffer,
       columns_specs: {columns_specs(data), unless: matches(@no_metadata, data.flags)}
@@ -21,13 +21,13 @@ defmodule CQL.MetaData do
 
   def pk_indices(buffer) do
     {pk_count, buffer} = int(buffer)
-    ntimes(pk_count, &short/1, buffer)
+    ntimes(pk_count, :short, buffer)
   end
 
   def global_spec(buffer) do
     unpack buffer,
-      keyspace: &string/1,
-      table:    &string/1
+      keyspace: :string,
+      table:    :string
   end
 
   def columns_specs(data) do
@@ -42,9 +42,9 @@ defmodule CQL.MetaData do
   def column_spec(nil) do
     fn buffer ->
       unpack buffer,
-        keyspace: &string/1,
-        table:    &string/1,
-        name:     &string/1,
+        keyspace: :string,
+        table:    :string,
+        name:     :string,
         type:     &option/1
     end
   end
@@ -52,7 +52,7 @@ defmodule CQL.MetaData do
   def column_spec(global) do
     fn buffer ->
       {spec, buffer} = unpack buffer,
-        name:     &string/1,
+        name:     :string,
         type:     &option/1
       {Map.merge(global, spec), buffer}
     end

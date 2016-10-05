@@ -108,7 +108,7 @@ defmodule CQL.Decoder do
   end
 
   def ntimes(n, func, buffer, items) do
-    {item, buffer} = func.(buffer)
+    {item, buffer} = ap(func, buffer)
     ntimes(n - 1, func, buffer, [item | items])
   end
 
@@ -137,12 +137,20 @@ defmodule CQL.Decoder do
   end
 
   def unpack_item({name, func}, {map, buffer}) do
-    {value, buffer} = func.(buffer)
+    {value, buffer} = ap(func, buffer)
     {Map.put(map, name, value), buffer}
   end
 
   def consistency(buffer) do
     {code, buffer} = short(buffer)
     {CQL.Consistency.name(code), buffer}
+  end
+
+  defp ap(func, buffer) when is_atom(func) do
+    apply(__MODULE__, func, [buffer])
+  end
+
+  defp ap(func, buffer) when is_function(func) do
+    func.(buffer)
   end
 end
