@@ -158,7 +158,7 @@ defmodule Cassandra.Client do
   # Helpers
 
   defp params(values, options) do
-    consistency = Keyword.get(options, :consistency, :ONE)
+    consistency = Keyword.get(options, :consistency, :one)
     %CQL.QueryParams{values: values, consistency: consistency}
   end
 

@@ -4,7 +4,7 @@ defmodule CQL.Query do
 
   defstruct [
     query: "",
-    params: %QueryParams{consistency: :ONE, flags: 0},
+    params: %QueryParams{},
   ]
 
   defimpl Request do

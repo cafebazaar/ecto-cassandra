@@ -1,23 +1,27 @@
 defmodule CQL.Consistency do
-  import CQL.Encoder
-
   @codes %{
-    :ANY          => 0x00,
-    :ONE          => 0x01,
-    :TWO          => 0x02,
-    :THREE        => 0x03,
-    :QUORUM       => 0x04,
-    :ALL          => 0x05,
-    :LOCAL_QUORUM => 0x06,
-    :EACH_QUORUM  => 0x07,
-    :SERIAL       => 0x08,
-    :LOCAL_SERIAL => 0x09,
-    :LOCAL_ONE    => 0x0A,
+    :any          => 0x00,
+    :one          => 0x01,
+    :two          => 0x02,
+    :three        => 0x03,
+    :quorum       => 0x04,
+    :all          => 0x05,
+    :local_quorum => 0x06,
+    :each_quorum  => 0x07,
+    :serial       => 0x08,
+    :local_serial => 0x09,
+    :local_one    => 0x0A,
   }
 
-  def encode(name) do
-    @codes
-    |> Map.fetch!(name)
-    |> short
+  @names @codes
+    |> Enum.map(fn {x, y} -> {y, x} end)
+    |> Enum.into(%{})
+
+  def code(name) do
+    Map.fetch!(@codes, name)
+  end
+
+  def name(code) do
+    Map.fetch!(@names, code)
   end
 end

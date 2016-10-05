@@ -2,10 +2,9 @@ defmodule CQL.QueryParams do
   require Bitwise
 
   import CQL.Encoder
-  alias CQL.Consistency
 
   defstruct [
-    consistency: :ONE,
+    consistency: :one,
     flags: 0,
     values: nil,
     result_page_size: nil,
@@ -42,7 +41,7 @@ defmodule CQL.QueryParams do
       |> prepend_when(:VALUES, !is_nil(q.values))
       |> prepend_when(:WITH_NAMES, is_map(q.values))
 
-    [Consistency.encode(q.consistency)]
+    [consistency(q.consistency)]
     |> prepend(flags |> flag |> byte)
     |> prepend_when(values(q.values), !is_nil(q.values))
     |> Enum.reverse

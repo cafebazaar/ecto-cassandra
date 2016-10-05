@@ -104,6 +104,12 @@ defmodule CQL.Encoder do
     short(len) <> <<binary::binary>>
   end
 
+  def consistency(name) do
+    name
+    |> CQL.Consistency.code
+    |> short
+  end
+
   def prepend(list, item), do: [item | list]
   def prepend_when(list, item, true), do: [item | list]
   def prepend_when(list, _item, false), do: list

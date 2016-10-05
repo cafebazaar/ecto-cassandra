@@ -60,7 +60,7 @@ defmodule CassandraTest do
         values (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert %Void{} = Client.execute(client, id, %{name: "john doe", address: "UK", age: 27}, consistency: :ONE)
+    assert %Void{} = Client.execute(client, id, %{name: "john doe", address: "UK", age: 27})
 
     %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
 

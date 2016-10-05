@@ -137,4 +137,9 @@ defmodule CQL.Decoder do
     {value, buffer} = func.(buffer)
     {Map.put(map, name, value), buffer}
   end
+
+  def consistency(buffer) do
+    {code, buffer} = short(buffer)
+    {CQL.Consistency.name(code), buffer}
+  end
 end
