@@ -36,6 +36,15 @@ defmodule Cassandra.Client do
     Connection.call(client, {:execute, id, values, options}, timeout)
   end
 
+  def register(client, types, timeout \\ :infinity) do
+    case Connection.call(client, {:register, List.wrap(types)}, timeout) do
+      %CQL.Ready{} ->
+        {:ok, Connection.call(client, :event_stream)}
+      reason ->
+        {:error, reason}
+    end
+  end
+
   def stop(client) do
     GenServer.stop(client)
   end
@@ -48,6 +57,8 @@ defmodule Cassandra.Client do
     timeout  = Keyword.get(options, :timeout, 5000)
     keyspace = Keyword.get(options, :keyspace)
 
+    {:ok, manager} = GenEvent.start_link
+
     state = %{
       host: host,
       port: port,
@@ -58,6 +69,7 @@ defmodule Cassandra.Client do
       socket: nil,
       backoff: next_backoff,
       keyspace: keyspace,
+      event_manager: manager,
     }
 
     {:connect, :init, state}
@@ -67,7 +79,7 @@ defmodule Cassandra.Client do
     with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
          :ok <- handshake(socket, timeout)
       do
-      send_use(state.keyspace, state.socket)
+      :ok = send_use(state.keyspace, state.socket)
       {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
     else
       :stop ->
@@ -119,13 +131,11 @@ defmodule Cassandra.Client do
 
   def handle_call({:use, keyspace}, _from, state) do
     :ok = send_use(keyspace, state.socket)
-    {:noreply, %{state | keyspace: keyspace}}
+    {:reply, :ok, %{state | keyspace: keyspace}}
   end
 
   def handle_call({:prepare, query}, from, state) do
-    request = %CQL.Prepare{
-      query: query
-    }
+    request = %CQL.Prepare{query: query}
     {:noreply, stream(request, from, state)}
   end
 
@@ -137,13 +147,21 @@ defmodule Cassandra.Client do
     {:noreply, stream(request, from, state)}
   end
 
+  def handle_call({:register, types}, from, state) do
+    request = %CQL.Register{types: types}
+    {:noreply, stream(request, from, state)}
+  end
+
+  def handle_call(:event_stream, _from, %{event_manager: manager} = state) do
+    {:reply, GenEvent.stream(manager), state}
+  end
+
   def handle_info({:tcp, socket, buffer}, %{socket: socket} = state) do
-    %CQL.Frame{stream: id, body: body} = CQL.decode(buffer)
-    with {{_, from}, new_state} <- pop_in(state.streams[id]) do
-      Connection.reply(from, body)
-      {:noreply, new_state}
-    else
-      _ -> {:noreply, state}
+    %CQL.Frame{stream: id} = frame = CQL.decode(buffer)
+    case id do
+      -1 -> handle_event(frame, state)
+       0 -> {:noreply, state}
+       _ -> handle_response(frame, state)
     end
   end
 
@@ -156,6 +174,18 @@ defmodule Cassandra.Client do
   end
 
   # Helpers
+
+  defp handle_event(%CQL.Frame{body: %CQL.Event{} = event}, state) do
+    GenEvent.notify(state.event_manager, event)
+    {:noreply, state}
+  end
+
+  defp handle_response(%CQL.Frame{stream: id, body: body}, state) do
+    {{_, from}, new_state} = pop_in(state.streams[id])
+    Connection.reply(from, body)
+    {:noreply, new_state}
+  end
+
 
   defp params(values, options) do
     consistency = Keyword.get(options, :consistency, :one)

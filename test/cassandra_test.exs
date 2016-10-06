@@ -37,6 +37,30 @@ defmodule CassandraTest do
     assert ["CQL_VERSION", "COMPRESSION"] = Keyword.keys(options)
   end
 
+  test "REGISTER", %{client: client} do
+    assert {:error, %CQL.Error{
+      code: :protocol_error,
+      message: "Invalid value 'BAD_TYPE' for Type",
+    }} = Client.register(client, "BAD_TYPE")
+
+    assert {:ok, stream} = Client.register(client, "SCHEMA_CHANGE")
+    task = Task.async(Enum, :take, [stream, 1])
+    Client.query client, """
+      create table event_test (
+        id uuid,
+        PRIMARY KEY (id)
+      );
+    """
+    assert [%CQL.Event{
+      type: "SCHEMA_CHANGE",
+      info: %{
+        change: "CREATED",
+        target: "TABLE",
+        options: %{keyspace: "elixir_cql_test", table: "event_test"},
+      },
+    }] = Task.await(task)
+  end
+
   test "INSERT", %{client: client} do
     assert %Void{} = Client.query client, """
       insert into users (userid, name, age, address, joined_at)

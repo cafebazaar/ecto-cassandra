@@ -7,6 +7,7 @@ defmodule CQL do
       :READY     -> CQL.Ready.decode(frame.body)
       :RESULT    -> CQL.Result.decode(frame.body)
       :SUPPORTED -> CQL.Supported.decode(frame.body)
+      :EVENT     -> CQL.Event.decode(frame.body)
       _          -> frame.body
     end
 
