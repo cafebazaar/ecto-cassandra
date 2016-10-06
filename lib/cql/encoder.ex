@@ -1,42 +1,42 @@
 defmodule CQL.Encoder do
 
   def byte(n) do
-    <<n::unsigned-integer-size(8)>>
+    <<n::integer-8>>
   end
 
   def boolean(false), do: byte(0)
   def boolean(true),  do: byte(1)
 
   def tinyint(n) do
-    <<n::unsigned-integer-size(8)>>
+    <<n::signed-integer-8>>
   end
 
   def short(n) do
-    <<n::unsigned-integer-size(16)>>
+    <<n::integer-16>>
   end
 
   def int(n) do
-    <<n::unsigned-integer-size(32)>>
+    <<n::signed-integer-32>>
   end
 
   def long(n) do
-    <<n::unsigned-integer-size(64)>>
+    <<n::signed-integer-64>>
   end
 
   def float(x) do
-    <<x::float-size(32)>>
+    <<x::float-32>>
   end
 
   def double(x) do
-    <<x::float-size(64)>>
+    <<x::float-64>>
   end
 
   def string(str) do
-    (str |> String.length |> short) <> <<str::binary>>
+    (str |> String.length |> short) <> <<str::bytes>>
   end
 
   def long_string(str) do
-    (str |> String.length |> int) <> <<str::binary>>
+    (str |> String.length |> int) <> <<str::bytes>>
   end
 
   def uuid(str) do
@@ -45,24 +45,24 @@ defmodule CQL.Encoder do
 
   def string_list(list) do
     len = Enum.count(list)
-    binary =
+    buffer =
       list
       |> Enum.map(&string/1)
       |> Enum.join
 
-    <<len::size(16), binary::binary>>
+    short(len) <> <<buffer::bytes>>
   end
 
   def bytes(nil) do
     int(-1)
   end
 
-  def bytes(str) do
-    int(byte_size(str)) <> <<str::binary>>
+  def bytes(bytes) do
+    int(byte_size(bytes)) <> <<bytes::bytes>>
   end
 
-  def short_bytes(str) do
-    short(byte_size(str)) <> <<str::binary>>
+  def short_bytes(bytes) do
+    short(byte_size(bytes)) <> <<bytes::bytes>>
   end
 
   def inet(xs, port) do
@@ -83,12 +83,12 @@ defmodule CQL.Encoder do
 
   def string_map(map) do
     len = Enum.count(map)
-    binary =
+    buffer =
       map
       |> Enum.map(fn {k, v} -> string(k) <> string(v) end)
       |> Enum.join
 
-    short(len) <> <<binary::binary>>
+    short(len) <> <<buffer::bytes>>
   end
 
   def string_multimap(map) do
@@ -99,12 +99,12 @@ defmodule CQL.Encoder do
 
   def bytes_map(map) do
     len = Enum.count(map)
-    binary =
+    buffer =
       map
       |> Enum.map(fn {k, v} -> string(k) <> bytes(v) end)
       |> Enum.join
 
-    short(len) <> <<binary::binary>>
+    short(len) <> <<buffer::bytes>>
   end
 
   def consistency(name) do
