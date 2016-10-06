@@ -17,6 +17,7 @@ defmodule CQL.DataTypes.Decoder do
   def decode(buffer, :timestamp), do: long(buffer)
   def decode(buffer, :text     ), do: {buffer, ""}
   def decode(buffer, :uuid     ), do: uuid(buffer)
+  def decode(buffer, :timeuuid ), do: uuid(buffer)
   def decode(buffer, :varchar  ), do: {buffer, ""}
   def decode(buffer, :time     ), do: long(buffer)
   def decode(buffer, :smallint ), do: short(buffer)

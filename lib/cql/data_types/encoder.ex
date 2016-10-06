@@ -12,6 +12,8 @@ defmodule CQL.DataTypes.Encoder do
     |> Enum.join
   end
 
+  defp parts(nil,       _value), do: [int(-1)]
+  defp parts(:not_set,  _value), do: [int(-2)]
   defp parts(:ascii,     value), do: [bytes(value)]
   defp parts(:bigint,    value), do: [int(8), long(value)]
   defp parts(:blob,      value), do: [bytes(value)]
@@ -24,6 +26,7 @@ defmodule CQL.DataTypes.Encoder do
   defp parts(:timestamp, value), do: [int(8), long(value)]
   defp parts(:text,      value), do: [long_string(value)]
   defp parts(:uuid,      value), do: [int(16), uuid(value)]
+  defp parts(:timeuuid,  value), do: [int(16), uuid(value)]
   defp parts(:varchar,   value), do: [long_string(value)]
   defp parts(:time,      value), do: [int(8), long(value)]
   defp parts(:smallint,  value), do: [int(2), short(value)]

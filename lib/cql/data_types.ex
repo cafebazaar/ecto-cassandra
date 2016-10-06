@@ -32,9 +32,17 @@ defmodule CQL.DataTypes do
   def decode({{type, nil}, value}), do: decode(value, type)
   def decode({type, value}),        do: decode(value, type)
 
+  def encode({:timestamp, :now}) do
+    {mega, sec, micro} = :erlang.timestamp
+    milli = mega * 1_000_000_000 + sec * 1000 + trunc(micro / 1000)
+    encode({:timestamp, milli})
+  end
+
   def encode({{type, nil}, value}), do: encode(value, type)
   def encode({type, value}),        do: encode(value, type)
 
+
+  def encode(nil),                            do: encode(nil, nil)
   def encode(%Date{} = value),                do: encode(value, :date)
   def encode(value) when is_integer(value),   do: encode(value, :int)
   def encode(value) when is_float(value),     do: encode(value, :double)
