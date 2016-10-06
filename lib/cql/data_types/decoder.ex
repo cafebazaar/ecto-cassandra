@@ -18,11 +18,12 @@ defmodule CQL.DataTypes.Decoder do
   def decode(buffer, :text     ), do: {buffer, ""}
   def decode(buffer, :uuid     ), do: uuid(buffer)
   def decode(buffer, :varchar  ), do: {buffer, ""}
-  def decode(buffer, :inet     ), do: buffer #TODO
-  def decode(buffer, :date     ), do: buffer #TODO
   def decode(buffer, :time     ), do: long(buffer)
   def decode(buffer, :smallint ), do: short(buffer)
   def decode(buffer, :tinyint  ), do: tinyint(buffer)
+  def decode(buffer, :inet     ), do: buffer #TODO
+  def decode(buffer, :date     ), do: CQL.DataTypes.Date.decode(buffer)
+
   def decode(buffer, {:decimal, size}), do: decimal(size, buffer)
   def decode(buffer, {:varint, size}), do: varint(size, buffer)
 

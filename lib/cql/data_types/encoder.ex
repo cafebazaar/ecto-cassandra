@@ -1,5 +1,6 @@
 defmodule CQL.DataTypes.Encoder do
   import CQL.Encoder
+  require Bitwise
 
   def encode(value, type) when is_integer(type) do
     encode(value, CQL.DataTypes.kind(type))
@@ -24,11 +25,11 @@ defmodule CQL.DataTypes.Encoder do
   defp parts(:text,      value), do: [long_string(value)]
   defp parts(:uuid,      value), do: [int(16), uuid(value)]
   defp parts(:varchar,   value), do: [long_string(value)]
-  defp parts(:inet,      value), do: [value] #TODO
-  defp parts(:date,      value), do: [value] #TODO
   defp parts(:time,      value), do: [int(8), long(value)]
   defp parts(:smallint,  value), do: [int(2), short(value)]
   defp parts(:tinyint,   value), do: [int(1), tinyint(value)]
+  defp parts(:inet,      value), do: [value] #TODO
+  defp parts(:date,      value), do: [CQL.DataTypes.Date.encode(value)]
   defp parts(:varint,    value), do: [varint(value)]
 
   defp parts(:decimal,   {unscaled, scale}) do
