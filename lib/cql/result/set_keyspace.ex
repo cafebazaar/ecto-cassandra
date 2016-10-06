@@ -1,5 +1,5 @@
 defmodule CQL.Result.SetKeyspace do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   defstruct [:name]
 

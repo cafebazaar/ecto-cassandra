@@ -1,5 +1,5 @@
 defmodule CQL.Opration do
-  import CQL.Encoder
+  import CQL.DataTypes.Encoder
 
   @names %{
     0x00 => :ERROR,

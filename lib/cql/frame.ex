@@ -1,5 +1,6 @@
 defmodule CQL.Frame do
-  import CQL.Encoder
+  import CQL.DataTypes.Encoder
+
   alias CQL.Opration
 
   defstruct [

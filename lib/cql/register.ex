@@ -1,5 +1,5 @@
 defmodule CQL.Register do
-  import CQL.Encoder
+  import CQL.DataTypes.Encoder
   alias CQL.{Request, Frame}
 
   @types [

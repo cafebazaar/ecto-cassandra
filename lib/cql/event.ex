@@ -1,5 +1,5 @@
 defmodule CQL.Event do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   defstruct [:type, :info]
 

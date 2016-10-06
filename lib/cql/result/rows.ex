@@ -1,5 +1,5 @@
 defmodule CQL.Result.Rows do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   def decode(buffer) do
     {data, buffer} = unpack buffer,

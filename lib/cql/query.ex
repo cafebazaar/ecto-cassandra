@@ -1,5 +1,6 @@
 defmodule CQL.Query do
-  import CQL.Encoder
+  import CQL.DataTypes.Encoder
+
   alias CQL.{Request, Frame, QueryParams}
 
   defstruct [

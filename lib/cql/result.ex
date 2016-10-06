@@ -1,5 +1,5 @@
 defmodule CQL.Result do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   alias CQL.Result
 

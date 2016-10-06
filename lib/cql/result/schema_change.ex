@@ -1,5 +1,5 @@
 defmodule CQL.Result.SchemaChange do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   defstruct [
     :change_type,

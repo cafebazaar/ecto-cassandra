@@ -34,7 +34,7 @@ defmodule CassandraTest do
 
   test "OPTIONS", %{client: client} do
     assert %Supported{options: options} = Client.options(client)
-    assert ["CQL_VERSION", "COMPRESSION"] = Keyword.keys(options)
+    assert ["COMPRESSION", "CQL_VERSION"] = Keyword.keys(options)
   end
 
   test "REGISTER", %{client: client} do
@@ -86,7 +86,7 @@ defmodule CassandraTest do
 
     assert %Void{} = Client.execute(client, id, %{name: "john doe", address: "UK", age: 27})
 
-    %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
+    %{id: id} = Client.prepare(client, "select name, age from users where age=? and address=? ALLOW FILTERING")
 
     rows = Client.execute(client, id, [27, "UK"])
     assert Enum.find(rows, fn map -> map["name"] == "john doe" end)

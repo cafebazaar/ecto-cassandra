@@ -1,7 +1,7 @@
 defmodule CQL.QueryParams do
-  require Bitwise
+  import CQL.DataTypes.Encoder
 
-  import CQL.Encoder
+  require Bitwise
 
   defstruct [
     consistency: :one,

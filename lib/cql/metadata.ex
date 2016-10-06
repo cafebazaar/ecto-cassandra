@@ -1,6 +1,7 @@
 defmodule CQL.MetaData do
+  import CQL.DataTypes.Decoder
+
   require Bitwise
-  import CQL.Decoder
 
   @global_spec    0x01
   @has_more_pages 0x02
@@ -63,16 +64,22 @@ defmodule CQL.MetaData do
     {value, buffer} = case id do
       0x00 -> string(buffer)
       0x20 -> option(buffer)
-      0x21 -> option_pair(buffer)
+      0x21 -> options_pair(buffer)
       0x22 -> option(buffer)
-      #TODO: complete me
+      0x30 -> {nil, buffer} # TODO: UDT
+      0x31 -> options(buffer)
       _    -> {nil, buffer}
     end
 
     {{id, value}, buffer}
   end
 
-  def option_pair(buffer) do
+  def options(buffer) do
+    {n, buffer} = short(buffer)
+    ntimes(n, &option/1, buffer)
+  end
+
+  def options_pair(buffer) do
     {option1, buffer} = option(buffer)
     {option2, buffer} = option(buffer)
 

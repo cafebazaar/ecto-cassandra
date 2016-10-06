@@ -1,7 +1,7 @@
 defmodule CQL.Error do
-  defstruct [:code, :message, :info]
+  import CQL.DataTypes.Decoder
 
-  import CQL.Decoder
+  defstruct [:code, :message, :info]
 
   @codes %{
     0x0000 => :server_error,

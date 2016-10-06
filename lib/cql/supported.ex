@@ -1,5 +1,5 @@
 defmodule CQL.Supported do
-  import CQL.Decoder
+  import CQL.DataTypes.Decoder
 
   defstruct [options: %{}]
 
