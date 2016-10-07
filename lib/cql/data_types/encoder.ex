@@ -175,8 +175,11 @@ defmodule CQL.DataTypes.Encoder do
   ### Helpers ###
 
   def prepend(list, item), do: [item | list]
-  def prepend_when(list, item, true), do: [item | list]
-  def prepend_when(list, _item, false), do: list
+  def prepend(list, _, nil), do: list
+  def prepend(list, _, false), do: list
+  def prepend(list, item, true), do: [item | list]
+  def prepend_not_nil(list, nil), do: list
+  def prepend_not_nil(list, item), do: [item | list]
 
   def now(unit), do: :erlang.system_time(unit)
 

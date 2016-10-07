@@ -7,6 +7,7 @@ defmodule CQL.QueryParams do
     consistency: :one,
     flags: 0,
     values: nil,
+    skip_metadata: false,
     result_page_size: nil,
     paging_state: nil,
     serial_consistency: nil,
@@ -14,13 +15,13 @@ defmodule CQL.QueryParams do
   ]
 
   @flags %{
-    :VALUES                  => 0x01,
-    :SKIP_METADATA           => 0x02,
-    :PAGE_SIZE               => 0x04,
-    :WITH_PAGING_STATE       => 0x08,
-    :WITH_SERIAL_CONSISTENCY => 0x10,
-    :WITH_DEFAULT_TIMESTAMP  => 0x20,
-    :WITH_NAMES              => 0x40,
+    :values                  => 0x01,
+    :skip_metadata           => 0x02,
+    :page_size               => 0x04,
+    :with_paging_state       => 0x08,
+    :with_serial_consistency => 0x10,
+    :with_default_timestamp  => 0x20,
+    :with_names              => 0x40,
   }
 
   def flag(flags) do
@@ -36,14 +37,30 @@ defmodule CQL.QueryParams do
   end
 
   def encode(q = %__MODULE__{}) do
-    flags =
-      []
-      |> prepend_when(:VALUES, !is_nil(q.values))
-      |> prepend_when(:WITH_NAMES, is_map(q.values))
+    has_values = !is_nil(q.values) and !Enum.empty?(q.values)
+    has_timestamp = is_integer(q.timestamp) and q.timestamp > 0
 
-    [consistency(q.consistency)]
-    |> prepend(flags |> flag |> byte)
-    |> prepend_when(values(q.values), !is_nil(q.values))
+    flag =
+      []
+      |> prepend(:values, has_values)
+      |> prepend(:skip_metadata, q.skip_metadata)
+      |> prepend(:page_size, q.result_page_size)
+      |> prepend(:with_paging_state, q.paging_state)
+      |> prepend(:with_serial_consistency, q.serial_consistency)
+      |> prepend(:with_default_timestamp, has_timestamp)
+      |> prepend(:with_names, has_values and is_map(q.values))
+      |> flag
+      |> byte
+
+    q.consistency
+    |> consistency
+    |> List.wrap
+    |> prepend(flag)
+    |> prepend(values(q.values), has_values)
+    |> prepend_not_nil(q.result_page_size)
+    |> prepend_not_nil(q.paging_state)
+    |> prepend_not_nil(q.serial_consistency)
+    |> prepend(q.timestamp, has_timestamp)
     |> Enum.reverse
     |> Enum.join
   end
@@ -56,6 +73,7 @@ defmodule CQL.QueryParams do
       list
       |> Enum.map(&CQL.DataTypes.encode/1)
       |> Enum.join
+
     short(n) <> <<binary::binary>>
   end
 
@@ -65,6 +83,7 @@ defmodule CQL.QueryParams do
       map
       |> Enum.map(fn {k, v} -> string(to_string(k)) <> CQL.DataTypes.encode(v) end)
       |> Enum.join
+
     short(n) <> <<binary::binary>>
   end
 end
