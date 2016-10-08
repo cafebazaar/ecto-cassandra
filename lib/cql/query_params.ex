@@ -8,7 +8,7 @@ defmodule CQL.QueryParams do
     flags: 0,
     values: nil,
     skip_metadata: false,
-    result_page_size: nil,
+    page_size: nil,
     paging_state: nil,
     serial_consistency: nil,
     timestamp: nil,
@@ -44,7 +44,7 @@ defmodule CQL.QueryParams do
       []
       |> prepend(:values, has_values)
       |> prepend(:skip_metadata, q.skip_metadata)
-      |> prepend(:page_size, q.result_page_size)
+      |> prepend(:page_size, q.page_size)
       |> prepend(:with_paging_state, q.paging_state)
       |> prepend(:with_serial_consistency, q.serial_consistency)
       |> prepend(:with_default_timestamp, has_timestamp)
@@ -57,9 +57,9 @@ defmodule CQL.QueryParams do
     |> List.wrap
     |> prepend(flag)
     |> prepend(values(q.values), has_values)
-    |> prepend_not_nil(q.result_page_size)
-    |> prepend_not_nil(q.paging_state)
-    |> prepend_not_nil(q.serial_consistency)
+    |> prepend_not_nil(q.page_size, :int)
+    |> prepend_not_nil(q.paging_state, :bytes)
+    |> prepend_not_nil(q.serial_consistency, :consistency)
     |> prepend(q.timestamp, has_timestamp)
     |> Enum.reverse
     |> Enum.join

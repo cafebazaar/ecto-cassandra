@@ -3,12 +3,25 @@ defmodule Cassandra.Client do
 
   require Logger
 
+  alias :gen_tcp, as: TCP
+  alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
+  alias CQL.Result.Rows
+
   @backoff_init 500
   @backoff_mult 1.6
   @backoff_jitt 0.2
   @backoff_max  12000
 
-  alias :gen_tcp, as: TCP
+  @default_params %{
+    consistency: :one,
+    skip_metadata: false,
+    page_size: 100,
+    paging_state: nil,
+    serial_consistency: nil,
+    timestamp: nil,
+  }
+
+  @valid_params Map.keys(@default_params)
 
   # Client API
 
@@ -38,7 +51,7 @@ defmodule Cassandra.Client do
 
   def register(client, types, timeout \\ :infinity) do
     case Connection.call(client, {:register, List.wrap(types)}, timeout) do
-      %CQL.Ready{} ->
+      %Ready{} ->
         {:ok, Connection.call(client, :event_stream)}
       reason ->
         {:error, reason}
@@ -118,11 +131,11 @@ defmodule Cassandra.Client do
   end
 
   def handle_call(:options, from, state) do
-    {:noreply, stream(%CQL.Options{}, from, state)}
+    {:noreply, stream(%Options{}, from, state)}
   end
 
   def handle_call({:query, query, values, options}, from, state) do
-    request = %CQL.Query{
+    request = %Query{
       query: query,
       params: params(values, options)
     }
@@ -135,12 +148,12 @@ defmodule Cassandra.Client do
   end
 
   def handle_call({:prepare, query}, from, state) do
-    request = %CQL.Prepare{query: query}
+    request = %Prepare{query: query}
     {:noreply, stream(request, from, state)}
   end
 
   def handle_call({:execute, id, values, options}, from, state) do
-    request = %CQL.Execute{
+    request = %Execute{
       id: id,
       params: params(values, options)
     }
@@ -148,7 +161,7 @@ defmodule Cassandra.Client do
   end
 
   def handle_call({:register, types}, from, state) do
-    request = %CQL.Register{types: types}
+    request = %Register{types: types}
     {:noreply, stream(request, from, state)}
   end
 
@@ -157,7 +170,7 @@ defmodule Cassandra.Client do
   end
 
   def handle_info({:tcp, socket, buffer}, %{socket: socket} = state) do
-    %CQL.Frame{stream: id} = frame = CQL.decode(buffer)
+    %Frame{stream: id} = frame = CQL.decode(buffer)
     case id do
       -1 -> handle_event(frame, state)
        0 -> {:noreply, state}
@@ -175,21 +188,25 @@ defmodule Cassandra.Client do
 
   # Helpers
 
-  defp handle_event(%CQL.Frame{body: %CQL.Event{} = event}, state) do
-    GenEvent.notify(state.event_manager, event)
+  defp handle_event(%Frame{body: %Event{} = event}, state) do
+    GenEvent.ack_notify(state.event_manager, event)
     {:noreply, state}
   end
 
-  defp handle_response(%CQL.Frame{stream: id, body: body}, state) do
+  defp handle_response(%Frame{stream: id, body: body}, state) do
     {{_, from}, new_state} = pop_in(state.streams[id])
     Connection.reply(from, body)
     {:noreply, new_state}
   end
 
-
   defp params(values, options) do
-    consistency = Keyword.get(options, :consistency, :one)
-    %CQL.QueryParams{values: values, consistency: consistency}
+    params =
+      options
+      |> Keyword.take(@valid_params)
+      |> Enum.into(@default_params)
+      |> Map.put(:values, values)
+
+    struct(QueryParams, params)
   end
 
   defp stream_all(state) do
@@ -222,7 +239,7 @@ defmodule Cassandra.Client do
   end
 
   defp send_startup(socket) do
-    %CQL.Startup{}
+    %Startup{}
     |> CQL.encode
     |> send_to(socket)
   end
@@ -230,11 +247,11 @@ defmodule Cassandra.Client do
   defp handshake(socket, timeout) do
     with :ok <- send_startup(socket),
          {:ok, buffer} <- TCP.recv(socket, 0, timeout),
-         %CQL.Frame{body: %CQL.Ready{}} <- CQL.decode(buffer)
+         %Frame{body: %Ready{}} <- CQL.decode(buffer)
       do
         :inet.setopts(socket, [active: true])
     else
-      %CQL.Frame{body: %CQL.Error{message: message}} ->
+      %Frame{body: %Error{message: message}} ->
         Logger.error("Handshake error: #{message}")
         :stop
       {:error, :closed} ->
@@ -253,7 +270,7 @@ defmodule Cassandra.Client do
   defp send_use(nil, _), do: :ok
   defp send_use(_, nil), do: :ok
   defp send_use(keyspace, socket) do
-    %CQL.Query{
+    %Query{
       query: "USE '#{keyspace}';",
       params: params([], [])
     }
