@@ -1,4 +1,4 @@
-defmodule Cassandra.Client do
+defmodule Cassandra.Connection do
   use Connection
 
   require Logger
@@ -29,37 +29,37 @@ defmodule Cassandra.Client do
     Connection.start_link(__MODULE__, options)
   end
 
-  def options(client, timeout \\ :infinity) do
-    Connection.call(client, :options, timeout)
+  def options(connection, timeout \\ :infinity) do
+    Connection.call(connection, :options, timeout)
   end
 
-  def use(client, keyspace, timeout \\ :infinity) do
-    Connection.call(client, {:use, keyspace}, timeout)
+  def use(connection, keyspace, timeout \\ :infinity) do
+    Connection.call(connection, {:use, keyspace}, timeout)
   end
 
-  def query(client, query, values \\ [], options \\ [], timeout \\ :infinity) do
-    Connection.call(client, {:query, query, values, options}, timeout)
+  def query(connection, query, values \\ [], options \\ [], timeout \\ :infinity) do
+    Connection.call(connection, {:query, query, values, options}, timeout)
   end
 
-  def prepare(client, query, timeout \\ :infinity) do
-    Connection.call(client, {:prepare, query}, timeout)
+  def prepare(connection, query, timeout \\ :infinity) do
+    Connection.call(connection, {:prepare, query}, timeout)
   end
 
-  def execute(client, id, values \\ [], options \\ [], timeout \\ :infinity) do
-    Connection.call(client, {:execute, id, values, options}, timeout)
+  def execute(connection, id, values \\ [], options \\ [], timeout \\ :infinity) do
+    Connection.call(connection, {:execute, id, values, options}, timeout)
   end
 
-  def register(client, types, timeout \\ :infinity) do
-    case Connection.call(client, {:register, List.wrap(types)}, timeout) do
+  def register(connection, types, timeout \\ :infinity) do
+    case Connection.call(connection, {:register, List.wrap(types)}, timeout) do
       %Ready{} ->
-        {:ok, Connection.call(client, :event_stream)}
+        {:ok, Connection.call(connection, :event_stream)}
       reason ->
         {:error, reason}
     end
   end
 
-  def stop(client) do
-    GenServer.stop(client)
+  def stop(connection) do
+    GenServer.stop(connection)
   end
 
   # Connection Callbacks
