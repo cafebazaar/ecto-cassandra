@@ -76,14 +76,12 @@ defmodule CQL.DataTypes.Decoder do
     buffer |> short |> bytes
   end
 
-  def inet(buffer) do
-    {size, buffer} = byte(buffer)
-    {ip, buffer} = ntimes(size, :byte, buffer)
+  def inet(<<a, b, c, d>>) do
+    {{a, b, c, d}, ""}
+  end
 
-    ip = List.to_tuple(ip)
-
-    {port, rest} = int(buffer)
-    {{ip, port}, rest}
+  def inet(<<a, b, c, d, e, f>>) do
+    {{a, b, c, d, e, f}, ""}
   end
 
   def string_map({n, buffer}) do

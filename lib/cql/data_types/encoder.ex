@@ -79,13 +79,12 @@ defmodule CQL.DataTypes.Encoder do
     short(byte_size(bytes)) <> <<bytes::bytes>>
   end
 
-  def inet({ip, port}) when is_tuple(ip) do
-    ip |> Tuple.to_list |> inet(port)
+  def inet(ip) when is_tuple(ip) do
+    ip |> Tuple.to_list |> inet
   end
 
-  def inet(ip, port) do
-    address = ip |> Enum.map(&byte/1) |> Enum.join
-    Enum.join([byte(length(ip)), address, int(port)])
+  def inet(ip) do
+    ip |> Enum.map(&byte/1) |> Enum.join
   end
 
   def string_map(map) do

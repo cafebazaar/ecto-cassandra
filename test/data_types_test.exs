@@ -80,11 +80,11 @@ defmodule CQL.DataTypesTest do
 
   test "inet" do
     nets = [
-      {{127, 0, 0, 1}, 8123},
-      {{192, 168, 100, 102}, 80},
+      {127, 0, 0, 1},
+      {192, 168, 100, 102},
     ]
     for net <- nets do
-      assert net == net |> encode(:inet) |> has_size(9) |> decode(:inet)
+      assert net == net |> encode(:inet) |> has_size(4) |> decode(:inet)
     end
   end
 
