@@ -13,8 +13,19 @@ defmodule CQL.Result.Rows do
     %__MODULE__{metadata: meta.metadata, data: data}
   end
 
-  def row_content(metadata) do
-    keys  = metadata.columns_specs |> Enum.map(&Map.get(&1, :name))
+  def to_map(%__MODULE__{metadata: metadata, data: data}) do
+    keys = metadata.columns_specs |> Enum.map(&Map.get(&1, :name))
+    data
+    |> Enum.map(&to_map(keys, &1))
+  end
+
+  defp to_map(keys, values) do
+    keys
+    |> Enum.zip(values)
+    |> Enum.into(%{})
+  end
+
+  defp row_content(metadata) do
     types = metadata.columns_specs |> Enum.map(&Map.get(&1, :type))
     fn binary ->
       {row, rest} = ntimes(metadata.columns_count, &bytes/1, binary)
@@ -22,7 +33,7 @@ defmodule CQL.Result.Rows do
     end
   end
 
-  def parse(row_content, types) do
+  defp parse(row_content, types) do
     types
     |> Enum.zip(row_content)
     |> Enum.map(&CQL.DataTypes.decode/1)
