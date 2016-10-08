@@ -20,6 +20,11 @@ defmodule CQL.DataTypes do
     0x12 => :time,
     0x13 => :smallint,
     0x14 => :tinyint,
+    0x20 => :list,
+    0x21 => :map,
+    0x22 => :set,
+    0x30 => :udt,
+    0x31 => :tuple,
   }
 
   def kind({id, nil}), do: kind(id)

@@ -121,7 +121,7 @@ defmodule CQL.DataTypes.Encoder do
       |> Enum.map(&encode(&1, type))
       |> Enum.join
 
-    short(size) <> <<buffer::bytes>>
+    int(size) <> <<buffer::bytes>>
   end
 
   def map(map, {ktype, vtype}) do
@@ -131,7 +131,7 @@ defmodule CQL.DataTypes.Encoder do
       |> Enum.map(fn {k, v} -> encode(k, ktype) <> encode(v, vtype) end)
       |> Enum.join
 
-    short(size) <> <<buffer::bytes>>
+    int(size) <> <<buffer::bytes>>
   end
 
   def set(set, type) do

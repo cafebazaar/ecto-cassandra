@@ -126,13 +126,13 @@ defmodule CQL.DataTypes.Decoder do
   end
 
   def list(buffer, type) do
-    {n, buffer} = short(buffer)
+    {n, buffer} = int(buffer)
     {list, rest} = ntimes(n, :bytes, buffer)
     {Enum.map(list, &decode(&1, type)), rest}
   end
 
   def map(buffer, {ktype, vtype}) do
-    {n, buffer} = short(buffer)
+    {n, buffer} = int(buffer)
     {list, rest} = ntimes(2 * n, :bytes, buffer)
     map =
       list
@@ -238,9 +238,9 @@ defmodule CQL.DataTypes.Decoder do
     func.(buffer)
   end
 
-  defp dec(buffer, :ascii    ), do: bytes(buffer)
+  defp dec(buffer, :ascii    ), do: {buffer, ""}
   defp dec(buffer, :bigint   ), do: long(buffer)
-  defp dec(buffer, :blob     ), do: bytes(buffer)
+  defp dec(buffer, :blob     ), do: {buffer, ""}
   defp dec(buffer, :boolean  ), do: boolean(buffer)
   defp dec(buffer, :counter  ), do: long(buffer)
   defp dec(buffer, :date     ), do: CQL.DataTypes.Date.decode(buffer)

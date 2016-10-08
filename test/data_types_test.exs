@@ -6,7 +6,7 @@ defmodule CQL.DataTypesTest do
 
   property "ascii" do
     for_all bin in binary do
-      bin == bin |> encode(:ascii) |> decode(:ascii)
+      bin == bin |> encode(:ascii) |> drop_size |> decode(:ascii)
     end
   end
 
@@ -18,7 +18,7 @@ defmodule CQL.DataTypesTest do
 
   property "blob" do
     for_all bin in binary do
-      bin == bin |> encode(:blob) |> decode(:blob)
+      bin == bin |> encode(:blob) |> drop_size |> decode(:blob)
     end
   end
 
