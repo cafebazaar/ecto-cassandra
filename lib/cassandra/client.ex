@@ -193,6 +193,10 @@ defmodule Cassandra.Client do
     {:noreply, state}
   end
 
+  defp handle_response(%Frame{stream: id, body: %Rows{data: data}}, state) do
+    handle_response(%Frame{stream: id, body: data}, state)
+  end
+
   defp handle_response(%Frame{stream: id, body: body}, state) do
     {{_, from}, new_state} = pop_in(state.streams[id])
     Connection.reply(from, body)

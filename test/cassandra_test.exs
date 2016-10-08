@@ -74,8 +74,8 @@ defmodule CassandraTest do
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    rows = Client.query(client, "select * from users;")
-    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+    rows = Client.query(client, "select name from users;")
+    assert Enum.find(rows, fn ["john doe"] -> true; _ -> false end)
   end
 
   test "PREPARE", %{client: client} do
@@ -89,7 +89,7 @@ defmodule CassandraTest do
     %{id: id} = Client.prepare(client, "select name, age from users where age=? and address=? ALLOW FILTERING")
 
     rows = Client.execute(client, id, [27, "UK"])
-    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+    assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
   end
 
   test "DELETE", %{client: client} do
@@ -98,11 +98,11 @@ defmodule CassandraTest do
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    user= Client.query(client, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
-    user_id=
-      user
+    user_id =
+      client
+      |> Client.query("select * from users where name='john doe' limit 1 ALLOW FILTERING")
       |> hd
-      |> Map.get("userid")
+      |> hd
 
     %{id: id} = Client.prepare(client, "delete from users where userid=?")
     assert %Void{} = Client.execute(client, id, [{:uuid, user_id}])
@@ -114,16 +114,14 @@ defmodule CassandraTest do
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    user= Client.query(client, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
-    user_id=
-      user
+    user_id =
+      client
+      |> Client.query("select * from users where name='john doe' limit 1 ALLOW FILTERING")
       |> hd
-      |> Map.get("userid")
+      |> hd
 
     %{id: id} = Client.prepare client, """
-      update users
-        set age=?, address=?
-        where userid=?
+      update users set age=?, address=? where userid=?
     """
 
     assert %Void{} = Client.execute(client, id, [27, "UK", {:uuid, user_id}])
@@ -131,10 +129,13 @@ defmodule CassandraTest do
     %{id: id} = Client.prepare(client, "select name,age from users where age=? and address=? ALLOW FILTERING")
 
     rows = Client.execute(client, id, [27, "UK"])
-    assert Enum.find(rows, fn map -> map["name"] == "john doe" end)
+    assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
   end
 
   test "ERROR", %{client: client} do
-    assert %CQL.Error{} = Client.query(client, "select * from some_table")
+    assert %CQL.Error{code: :invalid, message: "unconfigured table some_table"} =
+      Client.query(client, "select * from some_table")
+    assert %CQL.Error{code: :syntax_error, message: "line 1:5 mismatched character '<EOF>' expecting set null"} =
+      Client.query(client, "-----")
   end
 end

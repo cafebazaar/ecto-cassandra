@@ -22,8 +22,10 @@ defmodule CQL.DataTypes do
     0x14 => :tinyint,
   }
 
-  def kind(type) do
-    Map.fetch!(@kinds, type)
+  def kind({id, nil}), do: kind(id)
+  def kind({id, value}), do: {kind(id), value}
+  def kind(id) when is_integer(id) do
+    Map.fetch!(@kinds, id)
   end
 
   defdelegate encode(sepc), to: CQL.DataTypes.Encoder
@@ -31,11 +33,4 @@ defmodule CQL.DataTypes do
 
   defdelegate decode(spec), to: CQL.DataTypes.Decoder
   defdelegate decode(value, type), to: CQL.DataTypes.Decoder
-
-  # def encode(nil),                            do: encode(nil, nil)
-  # def encode(%Date{} = value),                do: encode(value, :date)
-  # def encode(value) when is_integer(value),   do: encode(value, :int)
-  # def encode(value) when is_float(value),     do: encode(value, :double)
-  # def encode(value) when is_bitstring(value), do: encode(value, :varchar)
-  # def encode(value) when is_boolean(value),   do: encode(value, :boolean)
 end

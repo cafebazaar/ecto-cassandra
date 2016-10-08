@@ -1,23 +1,7 @@
 defmodule CQL.DataTypes.Decoder do
   require Bitwise
 
-  def decode({type, buffer}) do
-    decode(buffer, type)
-  end
-
-  def decode(buffer, {type, size}) when is_integer(type) do
-    decode(buffer, {CQL.DataTypes.kind(type), size})
-  end
-
-  def decode(buffer, type) when is_integer(type) do
-    decode(buffer, CQL.DataTypes.kind(type))
-  end
-
-  def decode(buffer, {type, size}) do
-    {value, ""} = dec(buffer, {type, size})
-    value
-  end
-
+  def decode({type, buffer}), do: decode(buffer, type)
   def decode(buffer, type) do
     {value, ""} = dec(buffer, type)
     value

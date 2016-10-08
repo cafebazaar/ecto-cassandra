@@ -8,13 +8,7 @@ defmodule CQL.DataTypes.Encoder do
   def encode(value) when is_bitstring(value), do: encode({:text, value})
   def encode(value) when is_boolean(value),   do: encode({:boolean, value})
 
-  def encode({type, value}) do
-    encode(value, type)
-  end
-
-  def encode(value, type) when is_integer(type) do
-    encode(value, CQL.DataTypes.kind(type))
-  end
+  def encode({type, value}), do: encode(value, type)
 
   def encode(value, type) do
     type |> enc(value) |> bytes

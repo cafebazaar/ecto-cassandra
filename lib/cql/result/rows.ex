@@ -1,14 +1,16 @@
 defmodule CQL.Result.Rows do
   import CQL.DataTypes.Decoder
 
+  defstruct [:metadata, :data]
+
   def decode(buffer) do
-    {data, buffer} = unpack buffer,
+    {meta, buffer} = unpack buffer,
       metadata:   &CQL.MetaData.decode/1,
       rows_count: :int
 
-    {rows_content, ""} = ntimes(data.rows_count, row_content(data.metadata), buffer)
+    {data, ""} = ntimes(meta.rows_count, row_content(meta.metadata), buffer)
 
-    rows_content
+    %__MODULE__{metadata: meta.metadata, data: data}
   end
 
   def row_content(metadata) do
@@ -16,18 +18,13 @@ defmodule CQL.Result.Rows do
     types = metadata.columns_specs |> Enum.map(&Map.get(&1, :type))
     fn binary ->
       {row, rest} = ntimes(metadata.columns_count, &bytes/1, binary)
-      {parse(row, types, keys), rest}
+      {parse(row, types), rest}
     end
   end
 
-  def parse(row_content, types, keys) do
-    values =
-      types
-      |> Enum.zip(row_content)
-      |> Enum.map(&CQL.DataTypes.decode/1)
-
-    keys
-    |> Enum.zip(values)
-    |> Enum.into(%{})
+  def parse(row_content, types) do
+    types
+    |> Enum.zip(row_content)
+    |> Enum.map(&CQL.DataTypes.decode/1)
   end
 end

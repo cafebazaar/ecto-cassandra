@@ -3,21 +3,23 @@ defmodule CQL.MetaData do
 
   require Bitwise
 
-  @global_spec    0x01
-  @has_more_pages 0x02
-  @no_metadata    0x04
+  @flags %{
+    :global_spec    => 0x01,
+    :has_more_pages => 0x02,
+    :no_metadata    => 0x04,
+  }
 
   def decode(buffer, pk_indices \\ false) do
-    {data, buffer} = unpack buffer,
+    {meta, buffer} = unpack buffer,
       flags:         :int,
       columns_count: :int,
       pk_indices:    {&pk_indices/1, when: pk_indices},
-      paging_state:  {:bytes, when: @has_more_pages}
+      paging_state:  {:bytes, when: @flags.has_more_pages}
 
     {specs, buffer} = unpack buffer,
-      columns_specs: {columns_specs(data), unless: matches(@no_metadata, data.flags)}
+      columns_specs: {columns_specs(meta), unless: matches(@flags.no_metadata, meta.flags)}
 
-    {Map.merge(data, specs), buffer}
+    {Map.merge(meta, specs), buffer}
   end
 
   def pk_indices(buffer) do
@@ -31,12 +33,12 @@ defmodule CQL.MetaData do
       table:    :string
   end
 
-  def columns_specs(data) do
+  def columns_specs(meta) do
     fn buffer ->
       {global, buffer} = unpack buffer,
-        spec: {&global_spec/1, when: matches(@global_spec, data.flags)}
+        spec: {&global_spec/1, when: matches(@flags.global_spec, meta.flags)}
       global_spec = Map.get(global, :spec)
-      ntimes(data.columns_count, column_spec(global_spec), buffer)
+      ntimes(meta.columns_count, column_spec(global_spec), buffer)
     end
   end
 
@@ -71,7 +73,7 @@ defmodule CQL.MetaData do
       _    -> {nil, buffer}
     end
 
-    {{id, value}, buffer}
+    {CQL.DataTypes.kind({id, value}), buffer}
   end
 
   def options(buffer) do
