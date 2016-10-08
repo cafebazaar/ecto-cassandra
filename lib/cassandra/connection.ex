@@ -83,6 +83,7 @@ defmodule Cassandra.Connection do
       backoff: next_backoff,
       keyspace: keyspace,
       event_manager: manager,
+      buffer: "",
     }
 
     {:connect, :init, state}
@@ -169,12 +170,18 @@ defmodule Cassandra.Connection do
     {:reply, GenEvent.stream(manager), state}
   end
 
-  def handle_info({:tcp, socket, buffer}, %{socket: socket} = state) do
-    %Frame{stream: id} = frame = CQL.decode(buffer)
-    case id do
-      -1 -> handle_event(frame, state)
-       0 -> {:noreply, state}
-       _ -> handle_response(frame, state)
+  def handle_info({:tcp, socket, data}, %{socket: socket, buffer: buffer} = state) do
+    case CQL.decode(buffer <> data) do
+      {%Frame{stream: id} = frame, buffer} ->
+        state = %{state | buffer: buffer}
+        case id do
+          -1 -> handle_event(frame, state)
+          0 -> {:noreply, state}
+          _ -> handle_response(frame, state)
+        end
+      {nil, buffer} ->
+        IO.inspect :incomplete_frame
+        {:noreply, %{state | buffer: buffer}}
     end
   end
 
@@ -251,7 +258,7 @@ defmodule Cassandra.Connection do
   defp handshake(socket, timeout) do
     with :ok <- send_startup(socket),
          {:ok, buffer} <- TCP.recv(socket, 0, timeout),
-         %Frame{body: %Ready{}} <- CQL.decode(buffer)
+         {%Frame{body: %Ready{}}, ""} <- CQL.decode(buffer)
       do
         :inet.setopts(socket, [active: true])
     else

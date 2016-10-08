@@ -24,15 +24,16 @@ defmodule CQL.Frame do
   end
 
   def decode(<<
-      version::unsigned-integer-size(8),
-      flags::unsigned-integer-size(8),
-      stream::signed-integer-size(16),
-      opcode::unsigned-integer-size(8),
-      length::unsigned-integer-size(32),
+      version::integer-8,
+      flags::integer-8,
+      stream::signed-integer-16,
+      opcode::integer-8,
+      length::integer-32,
       body::binary-size(length),
+      rest::binary,
     >>)
   do
-    %__MODULE__{
+    frame = %__MODULE__{
       version: version,
       flags: flags,
       stream: stream,
@@ -40,5 +41,8 @@ defmodule CQL.Frame do
       length: length,
       body: body,
     }
+    {frame, rest}
   end
+
+  def decode(buffer), do: {nil, buffer}
 end

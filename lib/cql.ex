@@ -1,14 +1,19 @@
 defmodule CQL do
-  def decode(binary) do
-    frame = CQL.Frame.decode(binary)
+  def decode(buffer) do
+    {frame, rest} = CQL.Frame.decode(buffer)
+    {decode_body(frame), rest}
+  end
 
-    body = case frame.opration do
-      :ERROR     -> CQL.Error.decode(frame.body)
-      :READY     -> CQL.Ready.decode(frame.body)
-      :RESULT    -> CQL.Result.decode(frame.body)
-      :SUPPORTED -> CQL.Supported.decode(frame.body)
-      :EVENT     -> CQL.Event.decode(frame.body)
-      _          -> frame.body
+  def decode_body(nil), do: nil
+
+  def decode_body(%CQL.Frame{opration: opration, body: body} = frame) do
+    body = case opration do
+      :ERROR     -> CQL.Error.decode(body)
+      :READY     -> CQL.Ready.decode(body)
+      :RESULT    -> CQL.Result.decode(body)
+      :SUPPORTED -> CQL.Supported.decode(body)
+      :EVENT     -> CQL.Event.decode(body)
+      _          -> body
     end
 
     %CQL.Frame{frame | body: body}
