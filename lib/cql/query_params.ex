@@ -5,7 +5,6 @@ defmodule CQL.QueryParams do
 
   defstruct [
     consistency: :one,
-    flags: 0,
     values: nil,
     skip_metadata: false,
     page_size: nil,
@@ -24,23 +23,17 @@ defmodule CQL.QueryParams do
     :with_names              => 0x40,
   }
 
-  def flag(flags) do
+  def flags(flags) do
     flags
     |> Enum.map(&Map.fetch!(@flags, &1))
     |> Enum.reduce(0, &Bitwise.bor(&1, &2))
-  end
-
-  def flags(flag) do
-    @flags
-    |> Enum.filter(fn {_, code} -> Bitwise.band(code, flag) != 0 end)
-    |> Enum.map(&elem(&1, 0))
   end
 
   def encode(q = %__MODULE__{}) do
     has_values = !is_nil(q.values) and !Enum.empty?(q.values)
     has_timestamp = is_integer(q.timestamp) and q.timestamp > 0
 
-    flag =
+    flags =
       []
       |> prepend(:values, has_values)
       |> prepend(:skip_metadata, q.skip_metadata)
@@ -49,13 +42,13 @@ defmodule CQL.QueryParams do
       |> prepend(:with_serial_consistency, q.serial_consistency)
       |> prepend(:with_default_timestamp, has_timestamp)
       |> prepend(:with_names, has_values and is_map(q.values))
-      |> flag
+      |> flags
       |> byte
 
     q.consistency
     |> consistency
     |> List.wrap
-    |> prepend(flag)
+    |> prepend(flags)
     |> prepend(values(q.values), has_values)
     |> prepend_not_nil(q.page_size, :int)
     |> prepend_not_nil(q.paging_state, :bytes)
