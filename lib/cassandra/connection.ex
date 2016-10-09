@@ -51,10 +51,10 @@ defmodule Cassandra.Connection do
 
   def register(connection, types, timeout \\ :infinity) do
     case Connection.call(connection, {:register, List.wrap(types)}, timeout) do
-      :ok ->
+      {:ok, :ready} ->
         Connection.call(connection, :event_stream)
-      reason ->
-        {:error, reason}
+      error ->
+        error
     end
   end
 
@@ -245,12 +245,12 @@ defmodule Cassandra.Connection do
   defp handle_response(%Frame{stream: id, body: body}, state) do
     {{_, from}, new_state} = pop_in(state.streams[id])
     response = case body do
-      %Error{} = error ->
-        error
+      %Error{message: message, code: code} ->
+        {:error, {code, message}}
       %Ready{} ->
-        :ok
+        {:ok, :ready}
       %Void{} ->
-        :ok
+        {:ok, :done}
       response ->
         {:ok, response}
     end

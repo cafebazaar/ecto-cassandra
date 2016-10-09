@@ -28,7 +28,7 @@ defmodule CassandraTest do
   end
 
   setup %{connection: connection} do
-    :ok = Connection.query(connection, "TRUNCATE users;")
+    {:ok, :done} = Connection.query(connection, "TRUNCATE users;")
     {:ok, %{connection: connection}}
   end
 
@@ -38,10 +38,8 @@ defmodule CassandraTest do
   end
 
   test "REGISTER", %{connection: connection} do
-    assert {:error, %CQL.Error{
-      code: :protocol_error,
-      message: "Invalid value 'BAD_TYPE' for Type",
-    }} = Connection.register(connection, "BAD_TYPE")
+    assert {:error, {:protocol_error, "Invalid value 'BAD_TYPE' for Type"}} =
+      Connection.register(connection, "BAD_TYPE")
 
     assert {:stream, stream} = Connection.register(connection, "SCHEMA_CHANGE")
     task = Task.async(Enum, :take, [stream, 1])
@@ -62,7 +60,7 @@ defmodule CassandraTest do
   end
 
   test "INSERT", %{connection: connection} do
-    assert :ok =
+    assert {:ok, :done} =
       Connection.query connection, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
@@ -70,7 +68,7 @@ defmodule CassandraTest do
   end
 
   test "INSERT SELECT", %{connection: connection} do
-    assert :ok = Connection.query connection, """
+    assert {:ok, :done} = Connection.query connection, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
@@ -84,7 +82,7 @@ defmodule CassandraTest do
         VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert :ok = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
+    assert {:ok, :done} = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
 
     assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
@@ -92,7 +90,7 @@ defmodule CassandraTest do
   end
 
   test "DELETE", %{connection: connection} do
-    assert :ok = Connection.query connection, """
+    assert {:ok, :done} = Connection.query connection, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
@@ -101,11 +99,11 @@ defmodule CassandraTest do
     user_id = data |> hd |> Map.get("userid")
 
     assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "DELETE FROM users WHERE userid=?")
-    assert :ok = Connection.execute(connection, id, [{:uuid, user_id}])
+    assert {:ok, :done} = Connection.execute(connection, id, [{:uuid, user_id}])
   end
 
   test "UPDATE", %{connection: connection} do
-    assert :ok = Connection.query connection, """
+    assert {:ok, :done} = Connection.query connection, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
@@ -117,7 +115,7 @@ defmodule CassandraTest do
       UPDATE users SET age=?, address=? WHERE userid=?
     """
 
-    assert :ok = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
+    assert {:ok, :done} = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
 
     assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name,age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
@@ -125,9 +123,9 @@ defmodule CassandraTest do
   end
 
   test "ERROR", %{connection: connection} do
-    assert %CQL.Error{code: :invalid, message: "unconfigured table some_table"} =
+    assert {:error, {:invalid, "unconfigured table some_table"}} =
       Connection.query(connection, "SELECT * FROM some_table")
-    assert %CQL.Error{code: :syntax_error, message: "line 1:5 mismatched character '<EOF>' expecting set null"} =
-      Connection.query(connection, "-----")
+    assert {:error, {:syntax_error, "line 1:0 no viable alternative at input 'SELEC' ([SELEC]...)"}} =
+      Connection.query(connection, "SELEC * FROM missing_table;")
   end
 end

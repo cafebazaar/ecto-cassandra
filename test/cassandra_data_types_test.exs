@@ -157,7 +157,7 @@ defmodule CassandraDataTypesTest do
       f_list2: {{:list, :int}, data.f_list2},
       f_set: {{:set, :int}, data.f_set},
     }
-    assert :ok = Connection.execute(connection, id, data_with_types)
+    assert {:ok, :done} = Connection.execute(connection, id, data_with_types)
     assert {:ok, [result]} = Connection.query(connection, "SELECT * FROM data_types LIMIT 1;")
     assert true =
       result
