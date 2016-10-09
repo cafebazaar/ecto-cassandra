@@ -4,16 +4,16 @@ defmodule CassandraTest do
 
   alias Cassandra.Connection
   alias CQL.Supported
-  alias CQL.Result.Void
+  alias CQL.Result.Prepared
 
   setup_all do
-    {:ok, connection} = Connection.start_link([])
+    {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
     Connection.query(connection, "drop keyspace elixir_cql_test;")
     Connection.query connection, """
       create keyspace elixir_cql_test
         with replication = {'class':'SimpleStrategy','replication_factor':1};
     """
-    Connection.query(connection, "USE elixir_cql_test;")
+    Connection.use(connection, "elixir_cql_test")
     Connection.query connection, """
       create table users (
         userid uuid,
@@ -33,7 +33,7 @@ defmodule CassandraTest do
   end
 
   test "OPTIONS", %{connection: connection} do
-    assert %Supported{options: options} = Connection.options(connection)
+    assert {:ok, %Supported{options: options}} = Connection.options(connection)
     assert ["COMPRESSION", "CQL_VERSION"] = Keyword.keys(options)
   end
 
@@ -43,7 +43,7 @@ defmodule CassandraTest do
       message: "Invalid value 'BAD_TYPE' for Type",
     }} = Connection.register(connection, "BAD_TYPE")
 
-    assert {:ok, stream} = Connection.register(connection, "SCHEMA_CHANGE")
+    assert {:stream, stream} = Connection.register(connection, "SCHEMA_CHANGE")
     task = Task.async(Enum, :take, [stream, 1])
     Connection.query connection, """
       create table event_test (
@@ -62,73 +62,68 @@ defmodule CassandraTest do
   end
 
   test "INSERT", %{connection: connection} do
-    assert %Void{} = Connection.query connection, """
+    assert :ok =
+      Connection.query connection, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
   end
 
   test "INSERT SELECT", %{connection: connection} do
-    assert %Void{} = Connection.query connection, """
+    assert :ok = Connection.query connection, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    rows = Connection.query(connection, "select name from users;")
+    {:ok, rows} = Connection.query(connection, "select name from users;")
     assert Enum.find(rows, fn ["john doe"] -> true; _ -> false end)
   end
 
   test "PREPARE", %{connection: connection} do
-    %{id: id} = Connection.prepare connection, """
+    {:ok, %Prepared{id: id}} = Connection.prepare connection, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert %Void{} = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
+    assert :ok = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
 
-    %{id: id} = Connection.prepare(connection, "select name, age from users where age=? and address=? ALLOW FILTERING")
+    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name, age from users where age=? and address=? ALLOW FILTERING")
 
-    rows = Connection.execute(connection, id, [27, "UK"])
+    {:ok, rows} = Connection.execute(connection, id, [27, "UK"])
     assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
   end
 
   test "DELETE", %{connection: connection} do
-    assert %Void{} = Connection.query connection, """
+    assert :ok = Connection.query connection, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    user_id =
-      connection
-      |> Connection.query("select * from users where name='john doe' limit 1 ALLOW FILTERING")
-      |> hd
-      |> hd
+    assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    user_id = data |> hd |> hd
 
-    %{id: id} = Connection.prepare(connection, "delete from users where userid=?")
-    assert %Void{} = Connection.execute(connection, id, [{:uuid, user_id}])
+    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "delete from users where userid=?")
+    assert :ok = Connection.execute(connection, id, [{:uuid, user_id}])
   end
 
   test "UPDATE", %{connection: connection} do
-    assert %Void{} = Connection.query connection, """
+    assert :ok = Connection.query connection, """
       insert into users (userid, name, age, address, joined_at)
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    user_id =
-      connection
-      |> Connection.query("select * from users where name='john doe' limit 1 ALLOW FILTERING")
-      |> hd
-      |> hd
+    assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    user_id = data |> hd |> hd
 
-    %{id: id} = Connection.prepare connection, """
+    {:ok, %Prepared{id: id}} = Connection.prepare connection, """
       update users set age=?, address=? where userid=?
     """
 
-    assert %Void{} = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
+    assert :ok = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
 
-    %{id: id} = Connection.prepare(connection, "select name,age from users where age=? and address=? ALLOW FILTERING")
+    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name,age from users where age=? and address=? ALLOW FILTERING")
 
-    rows = Connection.execute(connection, id, [27, "UK"])
+    {:ok, rows} = Connection.execute(connection, id, [27, "UK"])
     assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
   end
 

@@ -2,5 +2,4 @@
 * Authentication
 * Compression
 * User Defined Types
-* Result Paging
 * Use prepared result_metadata optimization

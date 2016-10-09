@@ -5,7 +5,7 @@ defmodule Cassandra.Connection do
 
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
-  alias CQL.Result.Rows
+  alias CQL.Result.{Rows, Void}
 
   @backoff_init 500
   @backoff_mult 1.6
@@ -51,8 +51,8 @@ defmodule Cassandra.Connection do
 
   def register(connection, types, timeout \\ :infinity) do
     case Connection.call(connection, {:register, List.wrap(types)}, timeout) do
-      %Ready{} ->
-        {:ok, Connection.call(connection, :event_stream)}
+      :ok ->
+        Connection.call(connection, :event_stream)
       reason ->
         {:error, reason}
     end
@@ -127,7 +127,7 @@ defmodule Cassandra.Connection do
     state.streams
     |> Map.values
     |> Enum.concat(state.waiting)
-    |> Enum.each(fn {_, from} -> Connection.reply(from, :error) end)
+    |> Enum.each(fn {_, from} -> Connection.reply(from, {:error, :stopped}) end)
 
     unless is_nil(socket), do: TCP.close(socket)
     Logger.error("terminating #{__MODULE__} #{inspect reason}")
@@ -169,7 +169,7 @@ defmodule Cassandra.Connection do
   end
 
   def handle_call(:event_stream, _from, %{event_manager: manager} = state) do
-    {:reply, GenEvent.stream(manager), state}
+    {:reply, {:stream, GenEvent.stream(manager)}, state}
   end
 
   def handle_info({:tcp, socket, data}, %{socket: socket, buffer: buffer} = state) do
@@ -202,8 +202,35 @@ defmodule Cassandra.Connection do
     {:noreply, state}
   end
 
+  defp handle_response(%Frame{stream: id, body: %Rows{metadata: %{paging_state: paging}, data: data}}, state) do
+    {{request, from}, new_state} = pop_in(state.streams[id])
+    manager = case from do
+      {:gen_event, manager} ->
+        manager
+      from ->
+        {:ok, manager} = GenEvent.start_link
+        stream = GenEvent.stream(manager)
+        Connection.reply(from, {:stream, stream})
+        manager
+    end
+
+    Enum.map(data, &GenEvent.ack_notify(manager, &1))
+    next_request = %{request | params: %{request.params | paging_state: paging}}
+
+    {:noreply, stream(next_request, {:gen_event, manager}, new_state)}
+  end
+
   defp handle_response(%Frame{stream: id, body: %Rows{data: data}}, state) do
-    handle_response(%Frame{stream: id, body: data}, state)
+    {{_, from}, new_state} = pop_in(state.streams[id])
+    case from do
+      {:gen_event, manager} ->
+        Enum.map(data, &GenEvent.ack_notify(manager, &1))
+        GenEvent.stop(manager)
+      from ->
+        Connection.reply(from, {:ok, data})
+    end
+    {:noreply, new_state}
+  end
 
   defp handle_response(%Frame{stream: 1, body: body}, state) do
     case body do
@@ -217,7 +244,17 @@ defmodule Cassandra.Connection do
 
   defp handle_response(%Frame{stream: id, body: body}, state) do
     {{_, from}, new_state} = pop_in(state.streams[id])
-    Connection.reply(from, body)
+    response = case body do
+      %Error{} = error ->
+        error
+      %Ready{} ->
+        :ok
+      %Void{} ->
+        :ok
+      response ->
+        {:ok, response}
+    end
+    Connection.reply(from, response)
     {:noreply, new_state}
   end
 
