@@ -235,7 +235,7 @@ defmodule Cassandra.Connection do
   defp handle_response(%Frame{stream: 1, body: body}, state) do
     case body do
       %Error{code: code, message: message} ->
-        Logger.error("{__MODULE__} error[#{code}] #{message}")
+        Logger.error("#{__MODULE__} error[#{code}] #{message}")
       response ->
         Logger.info("#{__MODULE__} #{inspect response}")
     end

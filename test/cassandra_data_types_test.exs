@@ -8,7 +8,7 @@ defmodule CassandraDataTypesTest do
 
   setup_all do
     {:ok, connection} = Connection.start_link([])
-    {:ok, _} = Connection.query(connection, "drop keyspace elixir_cql_test;")
+    {:ok, _} = Connection.query(connection, "drop keyspace if exists elixir_cql_test;")
     {:ok, _} = Connection.query connection, """
       create keyspace elixir_cql_test
         with replication = {'class':'SimpleStrategy','replication_factor':1};
