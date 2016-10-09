@@ -33,10 +33,6 @@ defmodule Cassandra.Connection do
     Connection.call(connection, :options, timeout)
   end
 
-  def use(connection, keyspace, timeout \\ :infinity) do
-    Connection.call(connection, {:use, keyspace}, timeout)
-  end
-
   def query(connection, query, values \\ [], options \\ [], timeout \\ :infinity) do
     Connection.call(connection, {:query, query, values, options}, timeout)
   end
@@ -89,12 +85,13 @@ defmodule Cassandra.Connection do
     {:connect, :init, state}
   end
 
-  def connect(_info, %{host: host, port: port, timeout: timeout, keyspace: keyspace} = state) do
+  def connect(_info, state = %{host: host, port: port, timeout: timeout, keyspace: keyspace}) do
     with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
-         :ok <- handshake(socket, timeout)
-      do
+         :ok <- handshake(socket, timeout),
+         :ok <- use_keyspace(socket, keyspace, timeout)
+    do
       Logger.info("#{__MODULE__} connected")
-      :ok = send_use(keyspace, socket)
+      :inet.setopts(socket, [active: true])
       {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
     else
       :stop ->
@@ -143,11 +140,6 @@ defmodule Cassandra.Connection do
       params: params(values, options)
     }
     {:noreply, stream(request, from, state)}
-  end
-
-  def handle_call({:use, keyspace}, _from, state) do
-    :ok = send_use(keyspace, state.socket)
-    {:reply, :ok, %{state | keyspace: keyspace}}
   end
 
   def handle_call({:prepare, query}, from, state) do
@@ -296,7 +288,7 @@ defmodule Cassandra.Connection do
          {:ok, buffer} <- TCP.recv(socket, 0, timeout),
          {%Frame{body: %Ready{}}, ""} <- CQL.decode(buffer)
       do
-        :inet.setopts(socket, [active: true])
+        :ok
     else
       %Frame{body: %Error{code: code, message: message}} ->
         Logger.error("#{__MODULE__} error[#{code}] #{message}")
@@ -314,10 +306,17 @@ defmodule Cassandra.Connection do
     end
   end
 
-  defp send_use(nil, _), do: :ok
-  defp send_use(_, nil), do: :ok
-  defp send_use(keyspace, socket) do
-    send_to(socket, %Query{query: "USE #{keyspace};"}, 1)
+  defp use_keyspace(nil, _, _), do: :ok
+  defp use_keyspace(_, nil, _), do: :ok
+  defp use_keyspace(socket, keyspace, timeout) do
+    with :ok <- send_to(socket, %Query{query: "USE #{keyspace};"}),
+         {:ok, buffer} <- TCP.recv(socket, 0, timeout),
+         {%Frame{body: %CQL.Result.SetKeyspace{}}, ""} <- CQL.decode(buffer)
+    do
+      :ok
+    else
+      error -> {:error, error}
+    end
   end
 
   defp next_backoff(current \\ @backoff_init) do

@@ -7,13 +7,7 @@ defmodule CassandraDataTypesTest do
   alias UUID
 
   setup_all do
-    {:ok, connection} = Connection.start_link([])
-    {:ok, _} = Connection.query(connection, "DROP KEYSPACE IF EXISTS elixir_cql_test;")
-    {:ok, _} = Connection.query connection, """
-      CREATE KEYSPACE IF NOT EXISTS elixir_cql_test
-        WITH replication = {'class':'SimpleStrategy','replication_factor':1};
-    """
-    {:ok, _} = Connection.query(connection, "USE elixir_cql_test;")
+    {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
     {:ok, _} = Connection.query connection, """
       CREATE TABLE data_types (
         f_ascii     ascii,

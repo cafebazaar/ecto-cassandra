@@ -8,12 +8,6 @@ defmodule CassandraTest do
 
   setup_all do
     {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
-    {:ok, _} = Connection.query(connection, "DROP KEYSPACE IF EXISTS elixir_cql_test;")
-    {:ok, _} = Connection.query connection, """
-      CREATE KEYSPACE IF NOT EXISTS elixir_cql_test
-        WITH replication = {'class':'SimpleStrategy','replication_factor':1};
-    """
-    :ok = Connection.use(connection, "elixir_cql_test")
     {:ok, _} = Connection.query connection, """
       CREATE TABLE users (
         userid uuid,
@@ -24,6 +18,7 @@ defmodule CassandraTest do
         PRIMARY KEY (userid)
       );
     """
+
     {:ok, %{connection: connection}}
   end
 
