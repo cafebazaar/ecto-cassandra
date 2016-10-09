@@ -1,6 +1,6 @@
 # Cassandra
 
-[![Build Status](https://travis-ci.org/hzamani/elixir-cassandra.svg?branch=master)](https://travis-ci.org/hzamani/elixir-cassandra)
+[![Build Status](https://travis-ci.org/cafebazaar/elixir-cassandra.svg?branch=master)](https://travis-ci.org/cafebazaar/elixir-cassandra)
 
 An Elixir driver for Apache Cassandra.
 
