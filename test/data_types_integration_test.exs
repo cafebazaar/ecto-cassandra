@@ -1,13 +1,12 @@
-defmodule CassandraDataTypesTest do
+defmodule DataTypesIntegrationTest do
   use ExUnit.Case
-  doctest Cassandra
 
   alias Cassandra.Connection
   alias CQL.Result.Prepared
   alias UUID
 
   setup_all do
-    {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
+    {:ok, connection} = Connection.start_link(keyspace: "elixir_cassandra_test")
     {:ok, _} = Connection.query connection, """
       CREATE TABLE data_types (
         f_ascii     ascii,

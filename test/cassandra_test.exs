@@ -7,7 +7,7 @@ defmodule CassandraTest do
   alias CQL.Result.Prepared
 
   setup_all do
-    {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
+    {:ok, connection} = Connection.start_link(keyspace: "elixir_cassandra_test")
     {:ok, _} = Connection.query connection, """
       CREATE TABLE users (
         userid uuid,
@@ -49,7 +49,7 @@ defmodule CassandraTest do
       info: %{
         change: "CREATED",
         target: "TABLE",
-        options: %{keyspace: "elixir_cql_test", table: "event_test"},
+        options: %{keyspace: "elixir_cassandra_test", table: "event_test"},
       },
     }] = Task.await(task)
   end
