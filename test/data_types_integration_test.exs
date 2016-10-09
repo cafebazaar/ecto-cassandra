@@ -2,7 +2,6 @@ defmodule DataTypesIntegrationTest do
   use ExUnit.Case
 
   alias Cassandra.Connection
-  alias CQL.Result.Prepared
   alias UUID
 
   setup_all do
@@ -45,7 +44,7 @@ defmodule DataTypesIntegrationTest do
   end
 
   test "DATA TYPES", %{connection: connection} do
-    {:ok, %Prepared{id: id}} = Connection.prepare connection, """
+    {:ok, prepared} = Connection.prepare connection, """
       INSERT INTO data_types (
         f_ascii,
         f_bigint,
@@ -124,33 +123,7 @@ defmodule DataTypesIntegrationTest do
       f_list2: [10, 20, 30, 40],
       f_set: MapSet.new([10, 20, 10, 20, 30]),
     }
-    data_with_types = %{
-      f_ascii: {:ascii, data.f_ascii},
-      f_bigint: {:bigint, data.f_bigint},
-      f_blob: {:blob, data.f_blob},
-      f_boolean: data.f_boolean,
-      f_date: data.f_date,
-      f_decimal: {:decimal, data.f_decimal},
-      f_double: data.f_double,
-      f_float: {:float, data.f_float},
-      f_inet: {:inet, data.f_inet},
-      f_int: data.f_int,
-      f_smallint: {:smallint, data.f_smallint},
-      f_text: data.f_text,
-      f_time: {:time, data.f_time},
-      f_timestamp: {:timestamp, data.f_timestamp},
-      f_timeuuid: {:uuid, data.f_timeuuid},
-      f_tinyint: {:tinyint, data.f_tinyint},
-      f_uuid: {:uuid, data.f_uuid},
-      f_varchar: data.f_varchar,
-      f_varint: {:varint, data.f_varint},
-      f_map1: {{:map, {:text, :text}}, data.f_map1},
-      f_map2: {{:map, {:int, :boolean}}, data.f_map2},
-      f_list1: {{:list, :text}, data.f_list1},
-      f_list2: {{:list, :int}, data.f_list2},
-      f_set: {{:set, :int}, data.f_set},
-    }
-    assert {:ok, :done} = Connection.execute(connection, id, data_with_types)
+    assert {:ok, :done} = Connection.execute(connection, prepared, data)
     assert {:ok, [result]} = Connection.query(connection, "SELECT * FROM data_types LIMIT 1;")
     assert true =
       result

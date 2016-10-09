@@ -4,7 +4,6 @@ defmodule CassandraTest do
 
   alias Cassandra.Connection
   alias CQL.Supported
-  alias CQL.Result.Prepared
 
   setup_all do
     {:ok, connection} = Connection.start_link(keyspace: "elixir_cassandra_test")
@@ -72,16 +71,16 @@ defmodule CassandraTest do
   end
 
   test "PREPARE", %{connection: connection} do
-    {:ok, %Prepared{id: id}} = Connection.prepare connection, """
+    {:ok, prepared} = Connection.prepare connection, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert {:ok, :done} = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
+    assert {:ok, :done} = Connection.execute(connection, prepared, %{name: "john doe", address: "UK", age: 27})
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+    assert {:ok, prepared} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, prepared, [27, "UK"])
   end
 
   test "DELETE", %{connection: connection} do
@@ -93,8 +92,8 @@ defmodule CassandraTest do
     assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "DELETE FROM users WHERE userid=?")
-    assert {:ok, :done} = Connection.execute(connection, id, [{:uuid, user_id}])
+    assert {:ok, prepared} = Connection.prepare(connection, "DELETE FROM users WHERE userid=?")
+    assert {:ok, :done} = Connection.execute(connection, prepared, [user_id])
   end
 
   test "UPDATE", %{connection: connection} do
@@ -106,15 +105,15 @@ defmodule CassandraTest do
     assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare connection, """
+    assert {:ok, prepared} = Connection.prepare connection, """
       UPDATE users SET age=?, address=? WHERE userid=?
     """
 
-    assert {:ok, :done} = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
+    assert {:ok, :done} = Connection.execute(connection, prepared, [27, "UK", user_id])
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name,age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+    assert {:ok, prepared} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, prepared, [27, "UK"])
   end
 
   test "ERROR", %{connection: connection} do

@@ -5,7 +5,7 @@ defmodule Cassandra.Connection do
 
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
-  alias CQL.Result.{Rows, Void}
+  alias CQL.Result.{Rows, Void, Prepared}
 
   @backoff_init 500
   @backoff_mult 1.6
@@ -41,8 +41,8 @@ defmodule Cassandra.Connection do
     Connection.call(connection, {:prepare, query}, timeout)
   end
 
-  def execute(connection, id, values \\ [], options \\ [], timeout \\ :infinity) do
-    Connection.call(connection, {:execute, id, values, options}, timeout)
+  def execute(connection, %Prepared{} = prepared, values \\ [], options \\ [], timeout \\ :infinity) do
+    Connection.call(connection, {:execute, prepared, values, options}, timeout)
   end
 
   def register(connection, types, timeout \\ :infinity) do
@@ -146,9 +146,9 @@ defmodule Cassandra.Connection do
     {:noreply, stream(request, from, state)}
   end
 
-  def handle_call({:execute, id, values, options}, from, state) do
+  def handle_call({:execute, %Prepared{} = prepared, values, options}, from, state) do
     request = %Execute{
-      id: id,
+      prepared: prepared,
       params: params(values, options)
     }
     {:noreply, stream(request, from, state)}
