@@ -93,12 +93,14 @@ defmodule Cassandra.Connection do
     with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
          :ok <- handshake(socket, timeout)
       do
+      Logger.info("#{__MODULE__} connected")
       :ok = send_use(keyspace, socket)
       {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
     else
       :stop ->
         {:stop, :handshake_error, state}
       _ ->
+        Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
         {:backoff, state.backoff, update_in(state.backoff, &next_backoff/1)}
     end
   end
@@ -107,10 +109,10 @@ defmodule Cassandra.Connection do
     :ok = TCP.close(socket)
     case info do
       {:error, :closed} ->
-        Logger.error("#{__MODULE__} Connection closed\n")
+        Logger.error("#{__MODULE__} connection closed")
       {:error, reason} ->
         message = :inet.format_error(reason)
-        Logger.error("#{__MODULE__} Connection error: #{message}")
+        Logger.error("#{__MODULE__} connection error #{message}")
     end
     new_state = %{state |
       waiting: Map.values(state.streams),
@@ -128,7 +130,7 @@ defmodule Cassandra.Connection do
     |> Enum.each(fn {_, from} -> Connection.reply(from, :error) end)
 
     unless is_nil(socket), do: TCP.close(socket)
-    Logger.error("Terminating #{__MODULE__}: #{inspect reason}")
+    Logger.error("terminating #{__MODULE__} #{inspect reason}")
   end
 
   def handle_call(:options, from, state) do
@@ -180,7 +182,7 @@ defmodule Cassandra.Connection do
           _ -> handle_response(frame, state)
         end
       {nil, buffer} ->
-        IO.inspect :incomplete_frame
+        Logger.info("#{__MODULE__} got incomplete frame")
         {:noreply, %{state | buffer: buffer}}
     end
   end
@@ -259,18 +261,18 @@ defmodule Cassandra.Connection do
       do
         :inet.setopts(socket, [active: true])
     else
-      %Frame{body: %Error{message: message}} ->
-        Logger.error("Handshake error: #{message}")
+      %Frame{body: %Error{code: code, message: message}} ->
+        Logger.error("#{__MODULE__} error[#{code}] #{message}")
         :stop
       {:error, :closed} ->
-        Logger.error("Connection closed before handshake")
+        Logger.error("#{__MODULE__} connection closed before handshake")
         :error
       {:error, reason} ->
         message = :inet.format_error(reason)
-        Logger.error("Handshake error: #{message}")
+        Logger.error("#{__MODULE__} handshake error: #{message}")
         :error
       error ->
-        Logger.error("Handshake error: #{inspect error}")
+        Logger.error("#{__MODULE__} handshake error: #{inspect error}")
         :error
     end
   end
