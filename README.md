@@ -1,10 +1,10 @@
 # Cassandra
 
-**TODO: Add description**
+[![Build Status](https://travis-ci.org/hzamani/elixir-cassandra.svg?branch=master)](https://travis-ci.org/hzamani/elixir-cassandra)
+
+An Elixir driver for Apache Cassandra.
 
 ## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
 
   1. Add `cassandra` to your list of dependencies in `mix.exs`:
 
@@ -13,12 +13,3 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
       [{:cassandra, "~> 0.1.0"}]
     end
     ```
-
-  2. Ensure `cassandra` is started before your application:
-
-    ```elixir
-    def application do
-      [applications: [:cassandra]]
-    end
-    ```
-
