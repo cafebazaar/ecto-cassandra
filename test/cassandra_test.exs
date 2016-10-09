@@ -8,13 +8,13 @@ defmodule CassandraTest do
 
   setup_all do
     {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
-    Connection.query(connection, "drop keyspace elixir_cql_test;")
-    Connection.query connection, """
+    {:ok, _} = Connection.query(connection, "drop keyspace elixir_cql_test;")
+    {:ok, _} = Connection.query connection, """
       create keyspace elixir_cql_test
         with replication = {'class':'SimpleStrategy','replication_factor':1};
     """
-    Connection.use(connection, "elixir_cql_test")
-    Connection.query connection, """
+    :ok = Connection.use(connection, "elixir_cql_test")
+    {:ok, _} = Connection.query connection, """
       create table users (
         userid uuid,
         name varchar,
@@ -28,7 +28,7 @@ defmodule CassandraTest do
   end
 
   setup %{connection: connection} do
-    Connection.query(connection, "TRUNCATE users;")
+    :ok = Connection.query(connection, "TRUNCATE users;")
     {:ok, %{connection: connection}}
   end
 
@@ -100,7 +100,7 @@ defmodule CassandraTest do
     assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "delete from users where userid=?")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "delete from users where userid=?")
     assert :ok = Connection.execute(connection, id, [{:uuid, user_id}])
   end
 
@@ -113,7 +113,7 @@ defmodule CassandraTest do
     assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    {:ok, %Prepared{id: id}} = Connection.prepare connection, """
+    assert {:ok, %Prepared{id: id}} = Connection.prepare connection, """
       update users set age=?, address=? where userid=?
     """
 
