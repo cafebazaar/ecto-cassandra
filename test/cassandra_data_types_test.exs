@@ -8,14 +8,14 @@ defmodule CassandraDataTypesTest do
 
   setup_all do
     {:ok, connection} = Connection.start_link([])
-    {:ok, _} = Connection.query(connection, "drop keyspace if exists elixir_cql_test;")
+    {:ok, _} = Connection.query(connection, "DROP KEYSPACE IF EXISTS elixir_cql_test;")
     {:ok, _} = Connection.query connection, """
-      create keyspace elixir_cql_test
-        with replication = {'class':'SimpleStrategy','replication_factor':1};
+      CREATE KEYSPACE IF NOT EXISTS elixir_cql_test
+        WITH replication = {'class':'SimpleStrategy','replication_factor':1};
     """
     {:ok, _} = Connection.query(connection, "USE elixir_cql_test;")
     {:ok, _} = Connection.query connection, """
-      create table data_types (
+      CREATE TABLE data_types (
         f_ascii     ascii,
         f_bigint    bigint,
         f_blob      blob,
@@ -53,7 +53,7 @@ defmodule CassandraDataTypesTest do
 
   test "DATA TYPES", %{connection: connection} do
     {:ok, %Prepared{id: id}} = Connection.prepare connection, """
-      insert into data_types (
+      INSERT INTO data_types (
         f_ascii,
         f_bigint,
         f_blob,
@@ -78,7 +78,7 @@ defmodule CassandraDataTypesTest do
         f_list1,
         f_list2,
         f_set
-      ) values (
+      ) VALUES (
         :f_ascii,
         :f_bigint,
         :f_blob,
@@ -158,7 +158,7 @@ defmodule CassandraDataTypesTest do
       f_set: {{:set, :int}, data.f_set},
     }
     assert :ok = Connection.execute(connection, id, data_with_types)
-    assert {:ok, [result]} = Connection.query(connection, "select * from data_types limit 1;")
+    assert {:ok, [result]} = Connection.query(connection, "SELECT * FROM data_types LIMIT 1;")
     assert true =
       result
       |> Map.values

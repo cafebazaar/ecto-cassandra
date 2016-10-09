@@ -8,14 +8,14 @@ defmodule CassandraTest do
 
   setup_all do
     {:ok, connection} = Connection.start_link(keyspace: "elixir_cql_test")
-    {:ok, _} = Connection.query(connection, "drop keyspace if exists elixir_cql_test;")
+    {:ok, _} = Connection.query(connection, "DROP KEYSPACE IF EXISTS elixir_cql_test;")
     {:ok, _} = Connection.query connection, """
-      create keyspace elixir_cql_test
-        with replication = {'class':'SimpleStrategy','replication_factor':1};
+      CREATE KEYSPACE IF NOT EXISTS elixir_cql_test
+        WITH replication = {'class':'SimpleStrategy','replication_factor':1};
     """
     :ok = Connection.use(connection, "elixir_cql_test")
     {:ok, _} = Connection.query connection, """
-      create table users (
+      CREATE TABLE users (
         userid uuid,
         name varchar,
         age int,
@@ -46,7 +46,7 @@ defmodule CassandraTest do
     assert {:stream, stream} = Connection.register(connection, "SCHEMA_CHANGE")
     task = Task.async(Enum, :take, [stream, 1])
     Connection.query connection, """
-      create table event_test (
+      CREATE TABLE event_test (
         id uuid,
         PRIMARY KEY (id)
       );
@@ -64,69 +64,69 @@ defmodule CassandraTest do
   test "INSERT", %{connection: connection} do
     assert :ok =
       Connection.query connection, """
-      insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      INSERT INTO users (userid, name, age, address, joined_at)
+        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
   end
 
   test "INSERT SELECT", %{connection: connection} do
     assert :ok = Connection.query connection, """
-      insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      INSERT INTO users (userid, name, age, address, joined_at)
+        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.query(connection, "select name from users;")
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.query(connection, "SELECT name FROM users;")
   end
 
   test "PREPARE", %{connection: connection} do
     {:ok, %Prepared{id: id}} = Connection.prepare connection, """
-      insert into users (userid, name, age, address, joined_at)
-        values (uuid(), ?, ?, ?, toTimestamp(now()));
+      INSERT INTO users (userid, name, age, address, joined_at)
+        VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
     assert :ok = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name, age from users where age=? and address=? ALLOW FILTERING")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
     assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
   end
 
   test "DELETE", %{connection: connection} do
     assert :ok = Connection.query connection, """
-      insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      INSERT INTO users (userid, name, age, address, joined_at)
+        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "delete from users where userid=?")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "DELETE FROM users WHERE userid=?")
     assert :ok = Connection.execute(connection, id, [{:uuid, user_id}])
   end
 
   test "UPDATE", %{connection: connection} do
     assert :ok = Connection.query connection, """
-      insert into users (userid, name, age, address, joined_at)
-        values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      INSERT INTO users (userid, name, age, address, joined_at)
+        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
+    assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
     assert {:ok, %Prepared{id: id}} = Connection.prepare connection, """
-      update users set age=?, address=? where userid=?
+      UPDATE users SET age=?, address=? WHERE userid=?
     """
 
     assert :ok = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
 
-    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name,age from users where age=? and address=? ALLOW FILTERING")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "SELECT name,age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
     assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
   end
 
   test "ERROR", %{connection: connection} do
     assert %CQL.Error{code: :invalid, message: "unconfigured table some_table"} =
-      Connection.query(connection, "select * from some_table")
+      Connection.query(connection, "SELECT * FROM some_table")
     assert %CQL.Error{code: :syntax_error, message: "line 1:5 mismatched character '<EOF>' expecting set null"} =
       Connection.query(connection, "-----")
   end
