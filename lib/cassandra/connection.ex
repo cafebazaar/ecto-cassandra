@@ -90,7 +90,6 @@ defmodule Cassandra.Connection do
          :ok <- handshake(socket, timeout),
          :ok <- use_keyspace(socket, keyspace, timeout)
     do
-      Logger.info("#{__MODULE__} connected")
       :inet.setopts(socket, [active: true])
       {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
     else
