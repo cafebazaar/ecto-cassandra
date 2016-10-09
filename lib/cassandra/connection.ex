@@ -78,7 +78,7 @@ defmodule Cassandra.Connection do
       timeout: timeout,
       waiting: [],
       streams: %{},
-      last_stream_id: 0,
+      last_stream_id: 1,
       socket: nil,
       backoff: next_backoff,
       keyspace: keyspace,
@@ -89,11 +89,11 @@ defmodule Cassandra.Connection do
     {:connect, :init, state}
   end
 
-  def connect(_info, %{host: host, port: port, timeout: timeout} = state) do
+  def connect(_info, %{host: host, port: port, timeout: timeout, keyspace: keyspace} = state) do
     with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
          :ok <- handshake(socket, timeout)
       do
-      :ok = send_use(state.keyspace, state.socket)
+      :ok = send_use(keyspace, socket)
       {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
     else
       :stop ->
@@ -115,7 +115,7 @@ defmodule Cassandra.Connection do
     new_state = %{state |
       waiting: Map.values(state.streams),
       streams: %{},
-      last_stream_id: 0,
+      last_stream_id: 1,
       socket: nil,
     }
     {:connect, :reconnect, new_state}
@@ -202,6 +202,15 @@ defmodule Cassandra.Connection do
 
   defp handle_response(%Frame{stream: id, body: %Rows{data: data}}, state) do
     handle_response(%Frame{stream: id, body: data}, state)
+
+  defp handle_response(%Frame{stream: 1, body: body}, state) do
+    case body do
+      %Error{code: code, message: message} ->
+        Logger.error("{__MODULE__} error[#{code}] #{message}")
+      response ->
+        Logger.info("#{__MODULE__} #{inspect response}")
+    end
+    {:noreply, state}
   end
 
   defp handle_response(%Frame{stream: id, body: body}, state) do
@@ -232,31 +241,19 @@ defmodule Cassandra.Connection do
 
   defp stream(request, from, %{socket: socket, last_stream_id: id} = state) do
     id = next_stream_id(id)
-    stream_to(socket, request, id)
+    send_to(socket, request, id)
 
     state
     |> Map.put(:last_stream_id, id)
     |> put_in([:streams, id], {request, from})
   end
 
-  defp stream_to(socket, request, id) do
-    request
-    |> CQL.encode(id)
-    |> send_to(socket)
-  end
-
-  defp send_to(request, socket) do
-    TCP.send(socket, request)
-  end
-
-  defp send_startup(socket) do
-    %Startup{}
-    |> CQL.encode
-    |> send_to(socket)
+  defp send_to(socket, request, id \\ 0) do
+    TCP.send(socket, CQL.encode(request, id))
   end
 
   defp handshake(socket, timeout) do
-    with :ok <- send_startup(socket),
+    with :ok <- send_to(socket, %Startup{}),
          {:ok, buffer} <- TCP.recv(socket, 0, timeout),
          {%Frame{body: %Ready{}}, ""} <- CQL.decode(buffer)
       do
@@ -281,12 +278,7 @@ defmodule Cassandra.Connection do
   defp send_use(nil, _), do: :ok
   defp send_use(_, nil), do: :ok
   defp send_use(keyspace, socket) do
-    %Query{
-      query: "USE '#{keyspace}';",
-      params: params([], [])
-    }
-    |> CQL.encode
-    |> send_to(socket)
+    send_to(socket, %Query{query: "USE #{keyspace};"}, 1)
   end
 
   defp next_backoff(current \\ @backoff_init) do
@@ -295,6 +287,6 @@ defmodule Cassandra.Connection do
     round(min(next, @backoff_max) + jitt)
   end
 
-  defp next_stream_id(32768), do: 1
+  defp next_stream_id(32768), do: 2
   defp next_stream_id(n), do: n + 1
 end
