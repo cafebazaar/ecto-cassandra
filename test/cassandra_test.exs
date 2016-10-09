@@ -75,8 +75,7 @@ defmodule CassandraTest do
         values (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    {:ok, rows} = Connection.query(connection, "select name from users;")
-    assert Enum.find(rows, fn ["john doe"] -> true; _ -> false end)
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.query(connection, "select name from users;")
   end
 
   test "PREPARE", %{connection: connection} do
@@ -87,10 +86,9 @@ defmodule CassandraTest do
 
     assert :ok = Connection.execute(connection, id, %{name: "john doe", address: "UK", age: 27})
 
-    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name, age from users where age=? and address=? ALLOW FILTERING")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name, age from users where age=? and address=? ALLOW FILTERING")
 
-    {:ok, rows} = Connection.execute(connection, id, [27, "UK"])
-    assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
   end
 
   test "DELETE", %{connection: connection} do
@@ -100,7 +98,7 @@ defmodule CassandraTest do
     """
 
     assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
-    user_id = data |> hd |> hd
+    user_id = data |> hd |> Map.get("userid")
 
     {:ok, %Prepared{id: id}} = Connection.prepare(connection, "delete from users where userid=?")
     assert :ok = Connection.execute(connection, id, [{:uuid, user_id}])
@@ -113,7 +111,7 @@ defmodule CassandraTest do
     """
 
     assert {:ok, data} = Connection.query(connection, "select * from users where name='john doe' limit 1 ALLOW FILTERING")
-    user_id = data |> hd |> hd
+    user_id = data |> hd |> Map.get("userid")
 
     {:ok, %Prepared{id: id}} = Connection.prepare connection, """
       update users set age=?, address=? where userid=?
@@ -121,10 +119,9 @@ defmodule CassandraTest do
 
     assert :ok = Connection.execute(connection, id, [27, "UK", {:uuid, user_id}])
 
-    {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name,age from users where age=? and address=? ALLOW FILTERING")
+    assert {:ok, %Prepared{id: id}} = Connection.prepare(connection, "select name,age from users where age=? and address=? ALLOW FILTERING")
 
-    {:ok, rows} = Connection.execute(connection, id, [27, "UK"])
-    assert Enum.find(rows, fn ["john doe", _] -> true; _ -> false end)
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, id, [27, "UK"])
   end
 
   test "ERROR", %{connection: connection} do

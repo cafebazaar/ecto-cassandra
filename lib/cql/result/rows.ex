@@ -10,7 +10,7 @@ defmodule CQL.Result.Rows do
 
     {data, ""} = ntimes(meta.rows_count, row_content(meta.metadata), buffer)
 
-    %__MODULE__{metadata: meta.metadata, data: data}
+    to_map(%__MODULE__{metadata: meta.metadata, data: data})
   end
 
   def to_map(%__MODULE__{metadata: metadata, data: data}) do
