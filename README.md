@@ -23,7 +23,7 @@ end
 ```elixir
 alias Cassandra.Connection
 
-{:ok, conn} = Connection.start_link # Connects to 127.0.0.1:9094 by default
+{:ok, conn} = Connection.start_link # Connects to 127.0.0.1:9042 by default
 
 {:ok, _} = Connection.query conn, """
   CREATE KEYSPACE IF NOT EXISTS test
