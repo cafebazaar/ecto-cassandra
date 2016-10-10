@@ -144,4 +144,41 @@ defmodule CassandraTest do
         assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
       end
     end
+
+    describe "Data Manipulation" do
+
+      test "DELETE", %{conn: conn} do
+        assert {:ok, :done} = Connection.query conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+        """
+
+        assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+
+        user_id = data |> hd |> Map.get("userid")
+        assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE userid=?")
+
+        assert {:ok, :done} = Connection.execute(conn, prepared, [user_id])
+      end
+
+      test "UPDATE", %{conn: conn} do
+        assert {:ok, :done} = Connection.query conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+        """
+
+        assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+        user_id = data |> hd |> Map.get("userid")
+
+        assert {:ok, prepared} = Connection.prepare conn, """
+          UPDATE users SET age=?, address=? WHERE userid=?
+        """
+
+        assert {:ok, :done} = Connection.execute(conn, prepared, [27, "UK", user_id])
+
+        assert {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+
+        assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
+      end
+    end
 end
