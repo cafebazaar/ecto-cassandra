@@ -9,12 +9,12 @@ defmodule CassandraTest do
     {:ok, conn} = Connection.start_link(keyspace: "elixir_cassandra_test")
     {:ok, _} = Connection.query conn, """
       CREATE TABLE users (
-        userid uuid,
+        id uuid,
         name varchar,
         age int,
         address text,
         joined_at timestamp,
-        PRIMARY KEY (userid)
+        PRIMARY KEY (id)
       );
     """
 
@@ -32,11 +32,10 @@ defmodule CassandraTest do
   end
 
   describe "#query" do
-
     test "returns :done when there result do not contain any rows", %{conn: conn} do
       assert {:ok, :done} =
         Connection.query conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
+          INSERT INTO users (id, name, age, address, joined_at)
             VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
         """
     end
@@ -44,7 +43,7 @@ defmodule CassandraTest do
     test "returns result rows as a list", %{conn: conn} do
       assert {:ok, :done} =
         Connection.query conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
+          INSERT INTO users (id, name, age, address, joined_at)
             VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
         """
 
@@ -76,7 +75,6 @@ defmodule CassandraTest do
   end
 
   describe "#register" do
-
     test "accepts invalid types", %{conn: conn} do
       assert {:error, {:protocol_error, "Invalid value 'BAD_TYPE' for Type"}} =
         Connection.register(conn, "BAD_TYPE")
@@ -104,10 +102,9 @@ defmodule CassandraTest do
   end
 
   describe "#prepare" do
-
     test "returns {:ok, prepared} with valid query", %{conn: conn} do
       assert {:ok, _} = Connection.prepare conn, """
-        INSERT INTO users (userid, name, age, address, joined_at)
+        INSERT INTO users (id, name, age, address, joined_at)
           VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
       """
     end
@@ -115,17 +112,16 @@ defmodule CassandraTest do
     test "returns {:error, {code, reason}} on error", %{conn: conn} do
       assert {:error, {:invalid, "unconfigured table some_table"}} =
         Connection.prepare conn, """
-          INSERT INTO some_table (userid, name, age, address, joined_at)
+          INSERT INTO some_table (id, name, age, address, joined_at)
             VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
         """
     end
   end
 
   describe "#execute" do
-
     test "returns :done when there result do not contain any rows", %{conn: conn} do
       {:ok, prepared} = Connection.prepare conn, """
-        INSERT INTO users (userid, name, age, address, joined_at)
+        INSERT INTO users (id, name, age, address, joined_at)
           VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
       """
 
@@ -134,7 +130,7 @@ defmodule CassandraTest do
 
     test "returns result rows as a list", %{conn: conn} do
       {:ok, prepared} = Connection.prepare conn, """
-        INSERT INTO users (userid, name, age, address, joined_at)
+        INSERT INTO users (id, name, age, address, joined_at)
           VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
       """
       {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
@@ -145,32 +141,31 @@ defmodule CassandraTest do
   end
 
   describe "Data Manipulation" do
-
     test "DELETE", %{conn: conn} do
       assert {:ok, :done} = Connection.query conn, """
-        INSERT INTO users (userid, name, age, address, joined_at)
+        INSERT INTO users (id, name, age, address, joined_at)
           VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
       """
 
       assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
 
-      user_id = data |> hd |> Map.get("userid")
-      assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE userid=?")
+      user_id = data |> hd |> Map.get("id")
+      assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE id=?")
 
       assert {:ok, :done} = Connection.execute(conn, prepared, [user_id])
     end
 
     test "UPDATE", %{conn: conn} do
       assert {:ok, :done} = Connection.query conn, """
-        INSERT INTO users (userid, name, age, address, joined_at)
+        INSERT INTO users (id, name, age, address, joined_at)
           VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
       """
 
       assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
-      user_id = data |> hd |> Map.get("userid")
+      user_id = data |> hd |> Map.get("id")
 
       assert {:ok, prepared} = Connection.prepare conn, """
-        UPDATE users SET age=?, address=? WHERE userid=?
+        UPDATE users SET age=?, address=? WHERE id=?
       """
 
       assert {:ok, :done} = Connection.execute(conn, prepared, [27, "UK", user_id])
