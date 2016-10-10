@@ -47,7 +47,7 @@ defmodule CassandraTest do
           INSERT INTO users (userid, name, age, address, joined_at)
             VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
         """
-        
+
       assert {:ok, [%{"name" => "john doe"}]} = Connection.query(conn, "SELECT name FROM users;")
     end
 
@@ -102,4 +102,46 @@ defmodule CassandraTest do
       }] = Task.await(task)
     end
   end
+
+
+    describe "#prepare" do
+
+      test "returns {:ok, prepared} with valid query", %{conn: conn} do
+        assert {:ok, prepared} = Connection.prepare conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+        """
+      end
+
+      test "returns {:error, {code, reason}} on error", %{conn: conn} do
+        assert {:error, {:invalid, "unconfigured table some_table"}} =
+          Connection.prepare conn, """
+            INSERT INTO some_table (userid, name, age, address, joined_at)
+              VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+          """
+      end
+    end
+
+    describe "#execute" do
+
+      test "returns :done when there result do not contain any rows", %{conn: conn} do
+        {:ok, prepared} = Connection.prepare conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+        """
+
+        assert {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
+      end
+
+      test "returns result rows as a list", %{conn: conn} do
+        {:ok, prepared} = Connection.prepare conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+        """
+        {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
+        {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+
+        assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
+      end
+    end
 end
