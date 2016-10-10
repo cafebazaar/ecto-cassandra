@@ -95,6 +95,9 @@ defmodule Cassandra.Connection do
     else
       :stop ->
         {:stop, :handshake_error, state}
+      {:error, {:keyspace, message}} ->
+        Logger.error("#{__MODULE__} #{message}")
+        {:stop, :invalid_keyspace, state}
       _ ->
         Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
         {:backoff, state.backoff, update_in(state.backoff, &next_backoff/1)}
@@ -126,7 +129,6 @@ defmodule Cassandra.Connection do
     |> Enum.each(fn {_, from} -> Connection.reply(from, {:error, :stopped}) end)
 
     unless is_nil(socket), do: TCP.close(socket)
-    Logger.error("terminating #{__MODULE__} #{inspect reason}")
   end
 
   def handle_call(:options, from, state) do
@@ -327,7 +329,12 @@ defmodule Cassandra.Connection do
     do
       :ok
     else
-      error -> {:error, error}
+      {%Frame{body: %CQL.Error{code: :syntax_error}}, ""} ->
+        {:error, {:keyspace, "Syntax error in keyspace name"}}
+      {%Frame{body: %CQL.Error{code: :invalid, message: message}}, ""} ->
+        {:error, {:keyspace, message}}
+      error ->
+        {:error, error}
     end
   end
 
