@@ -3,7 +3,7 @@ defmodule Cassandra.Mixfile do
 
   def project, do: [
     app: :cassandra,
-    version: "0.1.1-beta",
+    version: "0.1.1-pre",
     elixir: "~> 1.3",
     build_embedded: Mix.env == :prod,
     start_permanent: Mix.env == :prod,
