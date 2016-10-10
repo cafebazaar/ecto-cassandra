@@ -177,7 +177,7 @@ defmodule CassandraTest do
 
     test "concurrent actions", %{conn: conn} do
       {:ok, insert} = Connection.prepare conn, """
-        INSERT INTO elixir_test.users (id, name, age) VALUES (uuid(), ?, ?);
+        INSERT INTO elixir_cassandra_test.users (id, name, age) VALUES (uuid(), ?, ?);
         """
 
       assert true =

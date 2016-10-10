@@ -122,7 +122,7 @@ defmodule Cassandra.Connection do
     {:connect, :reconnect, next_state}
   end
 
-  def terminate(reason, %{socket: socket} = state) do
+  def terminate(_reason, %{socket: socket} = state) do
     state.streams
     |> Map.values
     |> Enum.concat(state.waiting)
@@ -169,7 +169,7 @@ defmodule Cassandra.Connection do
     {:reply, {:stream, GenEvent.stream(manager)}, state}
   end
 
-  def handle_info({:tcp, socket, data}, %{socket: socket, buffer: buffer} = state) do
+  def handle_info({:tcp, socket, data}, %{socket: socket} = state) do
     handle_data(data, state)
   end
 
@@ -183,7 +183,7 @@ defmodule Cassandra.Connection do
 
   # Helpers
 
-  defp handle_data(data, state = %{buffer: buffer}) do
+  defp handle_data(data, %{buffer: buffer} = state) do
     case CQL.decode(buffer <> data) do
       {%Frame{stream: id} = frame, buffer} ->
         next_state = case id do
