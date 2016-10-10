@@ -11,7 +11,7 @@ defmodule CQL.Execute do
 
   defimpl Request do
     def frame(%CQL.Execute{prepared: %Prepared{id: id} = prepared, params: %QueryParams{} = params}) do
-      values = zip(prepared.metadata.columns_specs, params.values)
+      values = zip(prepared.metadata.column_types, params.values)
 
       %Frame{
         opration: :EXECUTE,
@@ -19,23 +19,20 @@ defmodule CQL.Execute do
       }
     end
 
-    defp zip(specs, values) when is_map(values) do
-      specs
-      |> Enum.map(&{Map.fetch!(&1, :name), Map.fetch!(&1, :type)})
-      |> Enum.into(%{})
-      |> zip_map(Enum.to_list(values), [])
+    defp zip(types, values) when is_map(values) do
+      zip_map(types, Enum.to_list(values), [])
     end
 
-    defp zip(specs, values) when is_list(values) do
-      specs
-      |> Enum.map(&Map.fetch!(&1, :type))
+    defp zip(types, values) when is_list(values) do
+      types
+      |> Keyword.values
       |> Enum.zip(values)
     end
 
     defp zip_map(_, [], zipped), do: Enum.into(zipped, %{})
 
     defp zip_map(types, [{name, value} | values], zipped) do
-      type = Map.fetch!(types, to_string(name))
+      {_, type} = List.keyfind(types, to_string(name), 0)
       zip_map(types, values, [{name, {type, value}} | zipped])
     end
   end

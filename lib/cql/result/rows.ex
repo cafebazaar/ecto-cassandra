@@ -14,7 +14,7 @@ defmodule CQL.Result.Rows do
   end
 
   def to_map(%__MODULE__{metadata: metadata, data: data}) do
-    keys = metadata.columns_specs |> Enum.map(&Map.get(&1, :name))
+    keys = Keyword.keys(metadata.column_types)
     data
     |> Enum.map(&to_map(keys, &1))
   end
@@ -26,7 +26,7 @@ defmodule CQL.Result.Rows do
   end
 
   defp row_content(metadata) do
-    types = metadata.columns_specs |> Enum.map(&Map.get(&1, :type))
+    types = Keyword.values(metadata.column_types)
     fn binary ->
       {row, rest} = ntimes(metadata.columns_count, &bytes/1, binary)
       {parse(row, types), rest}

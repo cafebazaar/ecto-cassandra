@@ -16,10 +16,20 @@ defmodule CQL.MetaData do
       pk_indices:    {&pk_indices/1, when: pk_indices},
       paging_state:  {:bytes, when: @flags.has_more_pages}
 
-    {specs, buffer} = unpack buffer,
-      columns_specs: {columns_specs(meta), unless: matches(@flags.no_metadata, meta.flags)}
+    no_meta? = flag?(@flags.no_metadata, meta.flags)
+    global?  = flag?(@flags.global_spec, meta.flags)
 
-    {Map.merge(meta, specs), buffer}
+    case {no_meta?, global?} do
+      {true, _} ->
+        {meta, buffer}
+      {false, true} ->
+        {global_spec, buffer}  = global_spec(buffer)
+        {column_types, buffer} = ntimes(meta.columns_count, &column_type/1, buffer)
+        {Map.merge(meta, %{column_types: column_types, global_spec: global_spec}), buffer}
+      {false, false} ->
+        {specs, buffer} = column_specs(meta.columns_count, buffer)
+        {Map.merge(meta, specs), buffer}
+    end
   end
 
   def pk_indices(buffer) do
@@ -33,32 +43,24 @@ defmodule CQL.MetaData do
       table:    :string
   end
 
-  def columns_specs(meta) do
-    fn buffer ->
-      {global, buffer} = unpack buffer,
-        spec: {&global_spec/1, when: matches(@flags.global_spec, meta.flags)}
-      global_spec = Map.get(global, :spec)
-      ntimes(meta.columns_count, column_spec(global_spec), buffer)
-    end
+  def column_specs(n, buffer) do
+    {specs, buffer} = ntimes(n, &column_spec/1, buffer)
+    {tables, types} = Enum.unzip(specs)
+    {%{column_types: types, column_specs: tables}, buffer}
   end
 
-  def column_spec(nil) do
-    fn buffer ->
-      unpack buffer,
-        keyspace: :string,
-        table:    :string,
-        name:     :string,
-        type:     &option/1
-    end
+  def column_spec(buffer) do
+    {keyspace, buffer} = string(buffer)
+    {table,    buffer} = string(buffer)
+    {name,     buffer} = string(buffer)
+    {type,     buffer} = option(buffer)
+    {{{keyspace, table}, {name, type}}, buffer}
   end
 
-  def column_spec(global) do
-    fn buffer ->
-      {spec, buffer} = unpack buffer,
-        name:     :string,
-        type:     &option/1
-      {Map.merge(global, spec), buffer}
-    end
+  def column_type(buffer) do
+    {name, buffer} = string(buffer)
+    {type, buffer} = option(buffer)
+    {{name, type}, buffer}
   end
 
   def option(buffer) do

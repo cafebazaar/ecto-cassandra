@@ -180,7 +180,7 @@ defmodule CQL.DataTypes.Decoder do
 
   ### Helpers ###
 
-  def matches(flag, flags) do
+  def flag?(flag, flags) do
     Bitwise.band(flag, flags) == flag
   end
 
@@ -216,7 +216,7 @@ defmodule CQL.DataTypes.Decoder do
   end
 
   defp pick({name, {func, [when: flag]}}, {map, buffer}) do
-    pick({name, {func, [when: matches(flag, map.flags)]}}, {map, buffer})
+    pick({name, {func, [when: flag?(flag, map.flags)]}}, {map, buffer})
   end
 
   defp pick({name, {func, [unless: boolean]}}, {map, buffer}) when is_boolean(boolean) do
