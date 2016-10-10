@@ -10,7 +10,10 @@ defmodule CQL.Result.Rows do
 
     {data, ""} = ntimes(meta.rows_count, row_content(meta.metadata), buffer)
 
-    to_map(%__MODULE__{metadata: meta.metadata, data: data})
+    keys = Keyword.keys(meta.metadata.column_types)
+    data = Enum.map(data, &to_map(keys, &1))
+
+    %__MODULE__{metadata: meta.metadata, data: data}
   end
 
   def to_map(%__MODULE__{metadata: metadata, data: data}) do
