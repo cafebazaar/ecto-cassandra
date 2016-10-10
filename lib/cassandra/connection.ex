@@ -33,8 +33,8 @@ defmodule Cassandra.Connection do
     Connection.call(connection, :options, timeout)
   end
 
-  def query(connection, query, values \\ [], options \\ [], timeout \\ :infinity) do
-    Connection.call(connection, {:query, query, values, options}, timeout)
+  def query(connection, query, options \\ [], timeout \\ :infinity) do
+    Connection.call(connection, {:query, query, options}, timeout)
   end
 
   def prepare(connection, query, timeout \\ :infinity) do
@@ -133,12 +133,16 @@ defmodule Cassandra.Connection do
     {:noreply, stream(%Options{}, from, state)}
   end
 
-  def handle_call({:query, query, values, options}, from, state) do
-    request = %Query{
-      query: query,
-      params: params(values, options)
-    }
-    {:noreply, stream(request, from, state)}
+  def handle_call({:query, query, options}, from, state) do
+    if String.contains?(query, "?") do
+      {:reply, {:error, {:invalid, "Query string can not contain bind marker `?`, use parepare instead"}}, state}
+    else
+      request = %Query{
+        query: query,
+        params: params([], options)
+      }
+      {:noreply, stream(request, from, state)}
+    end
   end
 
   def handle_call({:prepare, query}, from, state) do
