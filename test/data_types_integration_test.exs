@@ -123,8 +123,11 @@ defmodule DataTypesIntegrationTest do
       f_list2: [10, 20, 30, 40],
       f_set: MapSet.new([10, 20, 10, 20, 30]),
     }
+
     assert {:ok, :done} = Connection.execute(connection, prepared, data)
+
     assert {:ok, [result]} = Connection.query(connection, "SELECT * FROM data_types LIMIT 1;")
+    
     assert true =
       result
       |> Map.values
