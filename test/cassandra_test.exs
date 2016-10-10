@@ -107,7 +107,7 @@ defmodule CassandraTest do
     describe "#prepare" do
 
       test "returns {:ok, prepared} with valid query", %{conn: conn} do
-        assert {:ok, prepared} = Connection.prepare conn, """
+        assert {:ok, _} = Connection.prepare conn, """
           INSERT INTO users (userid, name, age, address, joined_at)
             VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
         """
