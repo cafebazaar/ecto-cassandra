@@ -10,98 +10,83 @@ defmodule CQL.DataTypes.Encoder do
 
   def encode({type, value}), do: encode(value, type)
 
-  def encode(value, type) do
-    type |> enc(value) |> bytes
-  end
+  def encode(value, type), do: type |> enc(value) |> bytes
 
-  def byte(n) do
-    <<n::integer-8>>
-  end
+  def byte(n) when is_integer(n), do: <<n::integer-8>>
+  def byte(_), do: :error
 
   def boolean(false), do: byte(0)
   def boolean(true),  do: byte(1)
+  def boolean(_),     do: :error
 
-  def tinyint(n) do
-    <<n::signed-integer-8>>
+  def tinyint(n) when is_integer(n), do: <<n::signed-integer-8>>
+  def tinyint(_), do: :error
+
+  def short(n) when is_integer(n), do: <<n::integer-16>>
+  def short(_), do: :error
+
+  def int(n) when is_integer(n), do: <<n::signed-integer-32>>
+  def int(_), do: :error
+
+  def long(n) when is_integer(n), do: <<n::signed-integer-64>>
+  def long(_), do: :error
+
+  def float(x) when is_float(x), do: <<x::float-32>>
+  def float(_), do: :error
+
+  def double(x) when is_float(x), do: <<x::float-64>>
+  def double(_), do: :error
+
+  def string(str) when is_bitstring(str), do: (str |> String.length |> short) <> <<str::bytes>>
+  def string(_), do: :error
+
+  def long_string(str) when is_bitstring(str), do: (str |> String.length |> int) <> <<str::bytes>>
+  def long_string(_), do: :error
+
+  def uuid(str) when is_bitstring(str), do: UUID.string_to_binary!(str)
+  def uuid(_), do: :error
+
+  def string_list(list) when is_list(list) do
+    if Enum.all?(list, &is_bitstring/1) do
+      n = Enum.count(list)
+      buffer = list |> Enum.map(&string/1) |> Enum.join
+      short(n) <> <<buffer::bytes>>
+    else
+      :error
+    end
   end
 
-  def short(n) do
-    <<n::integer-16>>
+  def bytes(nil), do: int(-1)
+  def bytes(bytes) when is_binary(bytes), do: int(byte_size(bytes)) <> <<bytes::bytes>>
+  def bytes(_), do: :error
+
+  def short_bytes(nil), do: int(-1)
+  def short_bytes(bytes) when is_binary(bytes), do: short(byte_size(bytes)) <> <<bytes::bytes>>
+  def short_bytes(_), do: :error
+
+  def inet(ip) when is_tuple(ip), do: ip |> Tuple.to_list |> inet
+  def inet(ip) when is_list(ip), do: ip |> Enum.map(&byte/1) |> Enum.join
+  def inet(_), do: :error
+
+  def string_map(map) when is_map(map) do
+    if map |> Map.values |> Enum.all?(&is_bitstring/1) do
+      n = Enum.count(map)
+      buffer = map |> Enum.map(fn {k, v} -> string(k) <> string(v) end) |> Enum.join
+      short(n) <> <<buffer::bytes>>
+    else
+      :error
+    end
   end
 
-  def int(n) do
-    <<n::signed-integer-32>>
-  end
+  def string_map(_), do: :error
 
-  def long(n) do
-    <<n::signed-integer-64>>
-  end
-
-  def float(x) do
-    <<x::float-32>>
-  end
-
-  def double(x) do
-    <<x::float-64>>
-  end
-
-  def string(str) do
-    (str |> String.length |> short) <> <<str::bytes>>
-  end
-
-  def long_string(str) do
-    (str |> String.length |> int) <> <<str::bytes>>
-  end
-
-  def uuid(str) do
-    UUID.string_to_binary!(str)
-  end
-
-  def string_list(list) do
-    len = Enum.count(list)
-    buffer =
-      list
-      |> Enum.map(&string/1)
-      |> Enum.join
-
-    short(len) <> <<buffer::bytes>>
-  end
-
-  def bytes(nil) do
-    int(-1)
-  end
-
-  def bytes(bytes) do
-    int(byte_size(bytes)) <> <<bytes::bytes>>
-  end
-
-  def short_bytes(bytes) do
-    short(byte_size(bytes)) <> <<bytes::bytes>>
-  end
-
-  def inet(ip) when is_tuple(ip) do
-    ip |> Tuple.to_list |> inet
-  end
-
-  def inet(ip) do
-    ip |> Enum.map(&byte/1) |> Enum.join
-  end
-
-  def string_map(map) do
-    len = Enum.count(map)
-    buffer =
-      map
-      |> Enum.map(fn {k, v} -> string(k) <> string(v) end)
-      |> Enum.join
-
-    short(len) <> <<buffer::bytes>>
-  end
-
-  def string_multimap(map) do
+  def string_multimap(map) when is_map(map) do
     map
     |> Enum.map(fn {k, v} -> {k, string_list(v)} end)
     |> string_map
   end
+
+  def string_multimap(_), do: :error
 
   def bytes_map(map) do
     size = Enum.count(map)
@@ -174,6 +159,9 @@ defmodule CQL.DataTypes.Encoder do
   def prepend(list, item, _), do: [item | list]
   def prepend_not_nil(list, nil, _func), do: list
   def prepend_not_nil(list, item, func), do: [apply(__MODULE__, func, [item]) | list]
+
+  def ok(:error), do: :error
+  def ok(value),  do: {:ok, value}
 
   def now(unit), do: :erlang.system_time(unit)
 

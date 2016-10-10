@@ -1,18 +1,18 @@
 defmodule CQL.Prepare do
   import CQL.DataTypes.Encoder
 
-  alias CQL.{Request, Frame}
+  alias CQL.{Request, Prepare}
 
-  defstruct [
-    query: "",
-  ]
+  defstruct [query: ""]
 
   defimpl Request do
-    def frame(%CQL.Prepare{query: query}) do
-      %Frame{
-        opration: :PREPARE,
-        body: long_string(query),
-      }
+    def encode(%Prepare{query: query}) do
+      case long_string(query) do
+        :error -> :error
+        body   -> {:PREPARE, body}
+      end
     end
+
+    def encode(_), do: :error
   end
 end

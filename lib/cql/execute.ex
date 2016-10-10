@@ -1,7 +1,7 @@
 defmodule CQL.Execute do
   import CQL.DataTypes.Encoder
 
-  alias CQL.{Request, Frame, QueryParams}
+  alias CQL.{Request, QueryParams}
   alias CQL.Result.Prepared
 
   defstruct [
@@ -10,14 +10,15 @@ defmodule CQL.Execute do
   ]
 
   defimpl Request do
-    def frame(%CQL.Execute{prepared: %Prepared{id: id} = prepared, params: %QueryParams{} = params}) do
-      values = zip(prepared.metadata.column_types, params.values)
-
-      %Frame{
-        opration: :EXECUTE,
-        body: short_bytes(id) <> QueryParams.encode(%{params | values: values}),
-      }
+    def encode(%CQL.Execute{prepared: %Prepared{id: id} = prepared, params: %QueryParams{} = params}) do
+      with {:ok, zipped} <- ok(zip(prepared.metadata.column_types, params.values)),
+           {:ok, encoded_params} <- ok(QueryParams.encode(%{params | values: zipped}))
+      do
+        {:EXECUTE, short_bytes(id) <> encoded_params}
+      end
     end
+
+    def encode(_), do: :error
 
     defp zip(types, values) when is_map(values) do
       zip_map(types, Enum.to_list(values), [])
@@ -29,11 +30,19 @@ defmodule CQL.Execute do
       |> Enum.zip(values)
     end
 
+    defp zip(_, values) when is_nil(values), do: nil
+
+    defp zip(_, _), do: :error
+
     defp zip_map(_, [], zipped), do: Enum.into(zipped, %{})
 
     defp zip_map(types, [{name, value} | values], zipped) do
-      {_, type} = List.keyfind(types, to_string(name), 0)
-      zip_map(types, values, [{name, {type, value}} | zipped])
+      case List.keyfind(types, to_string(name), 0) do
+        nil ->
+          :error
+        {_, type} ->
+          zip_map(types, values, [{name, {type, value}} | zipped])
+      end
     end
   end
 end

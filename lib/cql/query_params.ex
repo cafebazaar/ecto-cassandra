@@ -29,8 +29,24 @@ defmodule CQL.QueryParams do
     |> Enum.reduce(0, &Bitwise.bor(&1, &2))
   end
 
-  def encode(q = %__MODULE__{}) do
-    has_values = !is_nil(q.values) and !Enum.empty?(q.values)
+  def encode(q = %__MODULE__{values: values}) when is_nil(values) do
+    encode(q, false, false, nil)
+  end
+
+  def encode(q = %__MODULE__{values: values}) when is_list(values) or is_map(values) do
+    if Enum.empty?(values) do
+      encode(q, false, false, nil)
+    else
+      case values(values) do
+        :error -> :error
+        encoded -> encode(q, true, is_map(values), encoded)
+      end
+    end
+  end
+
+  def encode(_), do: :error
+
+  defp encode(q, has_values, has_names, values) do
     has_timestamp = is_integer(q.timestamp) and q.timestamp > 0
 
     flags =
@@ -41,7 +57,7 @@ defmodule CQL.QueryParams do
       |> prepend(:with_paging_state, q.paging_state)
       |> prepend(:with_serial_consistency, q.serial_consistency)
       |> prepend(:with_default_timestamp, has_timestamp)
-      |> prepend(:with_names, has_values and is_map(q.values))
+      |> prepend(:with_names, has_names)
       |> flags
       |> byte
 
@@ -49,7 +65,7 @@ defmodule CQL.QueryParams do
     |> consistency
     |> List.wrap
     |> prepend(flags)
-    |> prepend(values(q.values), has_values)
+    |> prepend(values, has_values)
     |> prepend_not_nil(q.page_size, :int)
     |> prepend_not_nil(q.paging_state, :bytes)
     |> prepend_not_nil(q.serial_consistency, :consistency)
@@ -58,25 +74,29 @@ defmodule CQL.QueryParams do
     |> Enum.join
   end
 
-  def values(nil), do: nil
+  defp values(list) when is_list(list) do
+    parts = Enum.map(list, &CQL.DataTypes.encode/1)
 
-  def values(list) when is_list(list) do
-    n = Enum.count(list)
-    binary =
-      list
-      |> Enum.map(&CQL.DataTypes.encode/1)
-      |> Enum.join
-
-    short(n) <> <<binary::binary>>
+    if Enum.any?(parts, &(&1 == :error)) do
+      :error
+    else
+      n = Enum.count(list)
+      Enum.join([short(n) | parts])
+    end
   end
 
-  def values(map) when is_map(map) do
-    n = Enum.count(map)
-    binary =
-      map
-      |> Enum.map(fn {k, v} -> string(to_string(k)) <> CQL.DataTypes.encode(v) end)
-      |> Enum.join
+  defp values(map) when is_map(map) do
+    parts = Enum.flat_map map, fn {k, v} ->
+      [string(to_string(k)), CQL.DataTypes.encode(v)]
+    end
 
-    short(n) <> <<binary::binary>>
+    if Enum.any?(parts, &(&1 == :error)) do
+      :error
+    else
+      n = Enum.count(map)
+      Enum.join([short(n) | parts])
+    end
   end
+
+  defp values(_), do: :error
 end

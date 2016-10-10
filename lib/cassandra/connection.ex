@@ -275,15 +275,24 @@ defmodule Cassandra.Connection do
 
   defp stream(request, from, %{socket: socket, last_stream_id: id} = state) do
     id = next_stream_id(id)
-    send_to(socket, request, id)
-
-    state
-    |> Map.put(:last_stream_id, id)
-    |> put_in([:streams, id], {request, from})
+    case send_to(socket, request, id) do
+      :error ->
+        state
+      _ ->
+        state
+        |> Map.put(:last_stream_id, id)
+        |> put_in([:streams, id], {request, from})
+    end
   end
 
   defp send_to(socket, request, id \\ 0) do
-    TCP.send(socket, CQL.encode(request, id))
+    case CQL.encode(request, id) do
+      :error ->
+        Logger.error("#{__MODULE__} invalid request #{inspect request}")
+        :error
+      frame ->
+        TCP.send(socket, frame)
+    end
   end
 
   defp handshake(socket, timeout) do

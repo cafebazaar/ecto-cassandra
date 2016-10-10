@@ -2,10 +2,10 @@ defmodule CQL.Options do
   defstruct []
 
   defimpl CQL.Request do
-    def frame(%CQL.Options{}) do
-      %CQL.Frame{
-        opration: :OPTIONS,
-      }
+    def encode(%CQL.Options{}) do
+      {:OPTIONS, ""}
     end
+
+    def encode(_), do: :error
   end
 end

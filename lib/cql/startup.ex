@@ -1,16 +1,18 @@
 defmodule CQL.Startup do
   import CQL.DataTypes.Encoder
 
-  alias CQL.{Request, Frame}
+  alias CQL.{Request, Startup}
 
   defstruct [options: %{"CQL_VERSION" => "3.0.0"}]
 
   defimpl Request do
-    def frame(%CQL.Startup{options: options}) do
-      %Frame{
-        opration: :STARTUP,
-        body: string_map(options),
-      }
+    def encode(%Startup{options: options}) do
+      case string_map(options) do
+        :error -> :error
+        body   -> {:STARTUP, body}
+      end
     end
+
+    def encode(_), do: :error
   end
 end

@@ -20,7 +20,11 @@ defmodule CQL do
   end
 
   def encode(request, stream \\ 0) do
-    frame = CQL.Request.frame(request)
-    CQL.Frame.encode(%CQL.Frame{frame | stream: stream})
+    case CQL.Request.encode(request) do
+      {opration, body} ->
+        CQL.Frame.encode(%CQL.Frame{opration: opration, body: body, stream: stream})
+      :error ->
+        :error
+    end
   end
 end
