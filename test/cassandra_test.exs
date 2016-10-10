@@ -103,82 +103,81 @@ defmodule CassandraTest do
     end
   end
 
+  describe "#prepare" do
 
-    describe "#prepare" do
-
-      test "returns {:ok, prepared} with valid query", %{conn: conn} do
-        assert {:ok, _} = Connection.prepare conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
-            VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
-        """
-      end
-
-      test "returns {:error, {code, reason}} on error", %{conn: conn} do
-        assert {:error, {:invalid, "unconfigured table some_table"}} =
-          Connection.prepare conn, """
-            INSERT INTO some_table (userid, name, age, address, joined_at)
-              VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
-          """
-      end
+    test "returns {:ok, prepared} with valid query", %{conn: conn} do
+      assert {:ok, _} = Connection.prepare conn, """
+        INSERT INTO users (userid, name, age, address, joined_at)
+          VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+      """
     end
 
-    describe "#execute" do
-
-      test "returns :done when there result do not contain any rows", %{conn: conn} do
-        {:ok, prepared} = Connection.prepare conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
+    test "returns {:error, {code, reason}} on error", %{conn: conn} do
+      assert {:error, {:invalid, "unconfigured table some_table"}} =
+        Connection.prepare conn, """
+          INSERT INTO some_table (userid, name, age, address, joined_at)
             VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
         """
+    end
+  end
 
-        assert {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
-      end
+  describe "#execute" do
 
-      test "returns result rows as a list", %{conn: conn} do
-        {:ok, prepared} = Connection.prepare conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
-            VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
-        """
-        {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
-        {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+    test "returns :done when there result do not contain any rows", %{conn: conn} do
+      {:ok, prepared} = Connection.prepare conn, """
+        INSERT INTO users (userid, name, age, address, joined_at)
+          VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+      """
 
-        assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
-      end
+      assert {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
     end
 
-    describe "Data Manipulation" do
+    test "returns result rows as a list", %{conn: conn} do
+      {:ok, prepared} = Connection.prepare conn, """
+        INSERT INTO users (userid, name, age, address, joined_at)
+          VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
+      """
+      {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
+      {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
-      test "DELETE", %{conn: conn} do
-        assert {:ok, :done} = Connection.query conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
-            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
-        """
-
-        assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
-
-        user_id = data |> hd |> Map.get("userid")
-        assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE userid=?")
-
-        assert {:ok, :done} = Connection.execute(conn, prepared, [user_id])
-      end
-
-      test "UPDATE", %{conn: conn} do
-        assert {:ok, :done} = Connection.query conn, """
-          INSERT INTO users (userid, name, age, address, joined_at)
-            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
-        """
-
-        assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
-        user_id = data |> hd |> Map.get("userid")
-
-        assert {:ok, prepared} = Connection.prepare conn, """
-          UPDATE users SET age=?, address=? WHERE userid=?
-        """
-
-        assert {:ok, :done} = Connection.execute(conn, prepared, [27, "UK", user_id])
-
-        assert {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
-
-        assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
-      end
+      assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
     end
+  end
+
+  describe "Data Manipulation" do
+
+    test "DELETE", %{conn: conn} do
+      assert {:ok, :done} = Connection.query conn, """
+        INSERT INTO users (userid, name, age, address, joined_at)
+          VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      """
+
+      assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+
+      user_id = data |> hd |> Map.get("userid")
+      assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE userid=?")
+
+      assert {:ok, :done} = Connection.execute(conn, prepared, [user_id])
+    end
+
+    test "UPDATE", %{conn: conn} do
+      assert {:ok, :done} = Connection.query conn, """
+        INSERT INTO users (userid, name, age, address, joined_at)
+          VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+      """
+
+      assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+      user_id = data |> hd |> Map.get("userid")
+
+      assert {:ok, prepared} = Connection.prepare conn, """
+        UPDATE users SET age=?, address=? WHERE userid=?
+      """
+
+      assert {:ok, :done} = Connection.execute(conn, prepared, [27, "UK", user_id])
+
+      assert {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+
+      assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
+    end
+  end
 end
