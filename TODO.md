@@ -1,4 +1,4 @@
-* [ ]  Batch statement
+* [ ] Batch statement
 * [ ] Authentication and SSL encryption
 * [ ] Compression
 * [ ] Automated peer discovery

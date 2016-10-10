@@ -6,8 +6,8 @@ defmodule CassandraTest do
   alias CQL.Supported
 
   setup_all do
-    {:ok, connection} = Connection.start_link(keyspace: "elixir_cassandra_test")
-    {:ok, _} = Connection.query connection, """
+    {:ok, conn} = Connection.start_link(keyspace: "elixir_cassandra_test")
+    {:ok, _} = Connection.query conn, """
       CREATE TABLE users (
         userid uuid,
         name varchar,
@@ -18,108 +18,129 @@ defmodule CassandraTest do
       );
     """
 
-    {:ok, %{connection: connection}}
+    {:ok, %{conn: conn}}
   end
 
-  setup %{connection: connection} do
-    {:ok, :done} = Connection.query(connection, "TRUNCATE users;")
-    {:ok, %{connection: connection}}
+  setup %{conn: conn} do
+    {:ok, :done} = Connection.query(conn, "TRUNCATE users;")
+    {:ok, %{conn: conn}}
   end
 
-  test "OPTIONS", %{connection: connection} do
-    assert {:ok, %Supported{options: options}} = Connection.options(connection)
+  test "OPTIONS", %{conn: conn} do
+    assert {:ok, %Supported{options: options}} = Connection.options(conn)
     assert ["COMPRESSION", "CQL_VERSION"] = Keyword.keys(options)
   end
 
-  test "REGISTER", %{connection: connection} do
-    assert {:error, {:protocol_error, "Invalid value 'BAD_TYPE' for Type"}} =
-      Connection.register(connection, "BAD_TYPE")
+  describe "QUERY" do
+    test "returns :done when there result do not contain any rows", %{conn: conn} do
+      assert {:ok, :done} =
+        Connection.query conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+        """
+    end
 
-    assert {:stream, stream} = Connection.register(connection, "SCHEMA_CHANGE")
-    task = Task.async(Enum, :take, [stream, 1])
-    Connection.query connection, """
-      CREATE TABLE event_test (
-        id uuid,
-        PRIMARY KEY (id)
-      );
-    """
-    assert [%CQL.Event{
-      type: "SCHEMA_CHANGE",
-      info: %{
-        change: "CREATED",
-        target: "TABLE",
-        options: %{keyspace: "elixir_cassandra_test", table: "event_test"},
-      },
-    }] = Task.await(task)
+    test "returns result rows as a list", %{conn: conn} do
+      assert {:ok, :done} =
+        Connection.query conn, """
+          INSERT INTO users (userid, name, age, address, joined_at)
+            VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
+        """
+      assert {:ok, [%{"name" => "john doe"}]} = Connection.query(conn, "SELECT name FROM users;")
+    end
+
+    test "returns result as a stream when there are more pages", %{conn: conn} do
+      assert {:stream, stream} =
+        Connection.query conn, "SELECT keyspace_name FROM system_schema.tables;", page_size: 2
+
+      assert true =
+        stream
+        |> Stream.map(&Map.keys/1)
+        |> Enum.any?(&(&1 == ["keyspace_name"]))
+    end
+
+    test "it forbids using bind marker", %{conn: conn} do
+      assert {:error, {:invalid, "Query string can not contain bind marker `?`, use parepare instead"}} =
+        Connection.query conn, "INSERT INTO users (id, name) VALUES (?, ?);"
+    end
   end
 
-  test "INSERT", %{connection: connection} do
-    assert {:ok, :done} =
-      Connection.query connection, """
-      INSERT INTO users (userid, name, age, address, joined_at)
-        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
-    """
+  describe "REGISTER" do
+    test "it do not accept invalid types", %{conn: conn} do
+      assert {:error, {:protocol_error, "Invalid value 'BAD_TYPE' for Type"}} =
+        Connection.register(conn, "BAD_TYPE")
+    end
+
+    test "returns a stream of events", %{conn: conn} do
+      assert {:stream, stream} = Connection.register(conn, "SCHEMA_CHANGE")
+      task = Task.async(Enum, :take, [stream, 1])
+      Connection.query conn, """
+        CREATE TABLE event_test (
+          id uuid,
+          PRIMARY KEY (id)
+        );
+      """
+      assert [%CQL.Event{
+        type: "SCHEMA_CHANGE",
+        info: %{
+          change: "CREATED",
+          target: "TABLE",
+          options: %{keyspace: "elixir_cassandra_test", table: "event_test"},
+        },
+      }] = Task.await(task)
+    end
   end
 
-  test "INSERT SELECT", %{connection: connection} do
-    assert {:ok, :done} = Connection.query connection, """
-      INSERT INTO users (userid, name, age, address, joined_at)
-        VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
-    """
-
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.query(connection, "SELECT name FROM users;")
-  end
-
-  test "PREPARE", %{connection: connection} do
-    {:ok, prepared} = Connection.prepare connection, """
+  test "PREPARE", %{conn: conn} do
+    {:ok, prepared} = Connection.prepare conn, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), ?, ?, ?, toTimestamp(now()));
     """
 
-    assert {:ok, :done} = Connection.execute(connection, prepared, %{name: "john doe", address: "UK", age: 27})
+    assert {:ok, :done} = Connection.execute(conn, prepared, %{name: "john doe", address: "UK", age: 27})
 
-    assert {:ok, prepared} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+    assert {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, prepared, [27, "UK"])
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
   end
 
-  test "DELETE", %{connection: connection} do
-    assert {:ok, :done} = Connection.query connection, """
+  test "DELETE", %{conn: conn} do
+    assert {:ok, :done} = Connection.query conn, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+    assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    assert {:ok, prepared} = Connection.prepare(connection, "DELETE FROM users WHERE userid=?")
-    assert {:ok, :done} = Connection.execute(connection, prepared, [user_id])
+    assert {:ok, prepared} = Connection.prepare(conn, "DELETE FROM users WHERE userid=?")
+    assert {:ok, :done} = Connection.execute(conn, prepared, [user_id])
   end
 
-  test "UPDATE", %{connection: connection} do
-    assert {:ok, :done} = Connection.query connection, """
+  test "UPDATE", %{conn: conn} do
+    assert {:ok, :done} = Connection.query conn, """
       INSERT INTO users (userid, name, age, address, joined_at)
         VALUES (uuid(), 'john doe', 20, 'US', toTimestamp(now()));
     """
 
-    assert {:ok, data} = Connection.query(connection, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
+    assert {:ok, data} = Connection.query(conn, "SELECT * FROM users WHERE name='john doe' LIMIT 1 ALLOW FILTERING")
     user_id = data |> hd |> Map.get("userid")
 
-    assert {:ok, prepared} = Connection.prepare connection, """
+    assert {:ok, prepared} = Connection.prepare conn, """
       UPDATE users SET age=?, address=? WHERE userid=?
     """
 
-    assert {:ok, :done} = Connection.execute(connection, prepared, [27, "UK", user_id])
+    assert {:ok, :done} = Connection.execute(conn, prepared, [27, "UK", user_id])
 
-    assert {:ok, prepared} = Connection.prepare(connection, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
+    assert {:ok, prepared} = Connection.prepare(conn, "SELECT name, age FROM users WHERE age=? AND address=? ALLOW FILTERING")
 
-    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(connection, prepared, [27, "UK"])
+    assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
   end
 
-  test "ERROR", %{connection: connection} do
+  test "ERROR", %{conn: conn} do
     assert {:error, {:invalid, "unconfigured table some_table"}} =
-      Connection.query(connection, "SELECT * FROM some_table")
+      Connection.query(conn, "SELECT * FROM some_table")
     assert {:error, {:syntax_error, "line 1:0 no viable alternative at input 'SELEC' ([SELEC]...)"}} =
-      Connection.query(connection, "SELEC * FROM missing_table;")
+      Connection.query(conn, "SELEC * FROM missing_table;")
   end
 end
