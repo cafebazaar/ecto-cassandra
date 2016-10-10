@@ -18,5 +18,4 @@ before_install:
   - java -version
   - wget http://www.us.apache.org/dist/cassandra/3.9/apache-cassandra-3.9-bin.tar.gz
   - tar -xzf apache-cassandra-3.9-bin.tar.gz
-  - sh ./apache-cassandra-3.9/bin/cassandra -E errors.log
-  - sleep 5
+  - sh ./apache-cassandra-3.9/bin/cassandra 2>&1 >/dev/null

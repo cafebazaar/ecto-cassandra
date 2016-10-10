@@ -174,5 +174,17 @@ defmodule CassandraTest do
 
       assert {:ok, [%{"name" => "john doe"}]} = Connection.execute(conn, prepared, [27, "UK"])
     end
+
+    test "concurrent actions", %{conn: conn} do
+      {:ok, insert} = Connection.prepare conn, """
+        INSERT INTO elixir_test.users (id, name, age) VALUES (uuid(), ?, ?);
+        """
+
+      assert true =
+        1..10
+        |> Enum.map(&Task.async(fn -> Connection.execute(conn, insert, ["user-#{&1}", &1 + 40]) end))
+        |> Enum.map(&Task.await(&1, :infinity))
+        |> Enum.all?(&(&1 == {:ok, :done}))
+    end
   end
 end
