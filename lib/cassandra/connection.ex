@@ -15,6 +15,8 @@ defmodule Cassandra.Connection do
     max_attempts: :infinity,
   }
 
+  @call_timeout :infinity
+
   @default_params %{
     consistency: :one,
     skip_metadata: false,
@@ -32,23 +34,23 @@ defmodule Cassandra.Connection do
     Connection.start_link(__MODULE__, options)
   end
 
-  def options(connection, timeout \\ :infinity) do
+  def options(connection, timeout \\ @call_timeout) do
     Connection.call(connection, :options, timeout)
   end
 
-  def query(connection, query, options \\ [], timeout \\ :infinity) do
+  def query(connection, query, options \\ [], timeout \\ @call_timeout) do
     Connection.call(connection, {:query, query, options}, timeout)
   end
 
-  def prepare(connection, query, timeout \\ :infinity) do
+  def prepare(connection, query, timeout \\ @call_timeout) do
     Connection.call(connection, {:prepare, query}, timeout)
   end
 
-  def execute(connection, %Prepared{} = prepared, values \\ [], options \\ [], timeout \\ :infinity) do
+  def execute(connection, %Prepared{} = prepared, values \\ [], options \\ [], timeout \\ @call_timeout) do
     Connection.call(connection, {:execute, prepared, values, options}, timeout)
   end
 
-  def register(connection, types, timeout \\ :infinity) do
+  def register(connection, types, timeout \\ @call_timeout) do
     case Connection.call(connection, {:register, List.wrap(types)}, timeout) do
       {:ok, :ready} ->
         Connection.call(connection, :event_stream)
