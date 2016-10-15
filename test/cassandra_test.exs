@@ -26,6 +26,16 @@ defmodule CassandraTest do
     {:ok, %{conn: conn}}
   end
 
+  describe "#start_link" do
+    @tag capture_log: true
+    test ":max_attempts option" do
+      {:ok, conn} = Connection.start_link(port: 9111, max_attempts: 1)
+      Process.unlink(conn)
+      Process.monitor(conn)
+      assert_receive {:DOWN, _, :process, ^conn, :max_attempts}
+    end
+  end
+
   test "#options", %{conn: conn} do
     assert {:ok, %Supported{options: options}} = Connection.options(conn)
     assert ["COMPRESSION", "CQL_VERSION"] = Keyword.keys(options)

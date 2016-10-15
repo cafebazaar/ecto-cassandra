@@ -8,6 +8,12 @@ defmodule Cassandra.Connection do
   alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
   alias CQL.Result.{Rows, Void, Prepared}
 
+  @defaults %{
+    host: "127.0.0.1",
+    port: 9042,
+    timeout: 5000,
+    max_attempts: :infinity,
+  }
 
   @default_params %{
     consistency: :one,
@@ -58,10 +64,11 @@ defmodule Cassandra.Connection do
   # Connection Callbacks
 
   def init(options) do
-    host     = Keyword.get(options, :hostname, "127.0.0.1") |> to_charlist
-    port     = Keyword.get(options, :port, 9042)
-    timeout  = Keyword.get(options, :timeout, 5000)
-    keyspace = Keyword.get(options, :keyspace)
+    host         = Keyword.get(options, :hostname, @defaults.host) |> to_charlist
+    port         = Keyword.get(options, :port, @defaults.port)
+    timeout      = Keyword.get(options, :timeout, @defaults.timeout)
+    keyspace     = Keyword.get(options, :keyspace)
+    max_attempts = Keyword.get(options, :max_attempts, @defaults.max_attempts)
 
     {:ok, manager} = GenEvent.start_link
 
@@ -77,6 +84,8 @@ defmodule Cassandra.Connection do
       keyspace: keyspace,
       event_manager: manager,
       buffer: "",
+      max_attempts: max_attempts,
+      attempts: 1,
     }
 
     {:connect, :init, state}
@@ -96,9 +105,15 @@ defmodule Cassandra.Connection do
         Logger.error("#{__MODULE__} #{message}")
         {:stop, :invalid_keyspace, state}
       _ ->
+        {attempts, state} = get_and_update_in(state.attempts, &{&1, &1 + 1})
+        if attempts < state.max_attempts do
           Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
           {backoff, state} = get_and_update_in(state.backoff, &{&1, Backoff.next(&1)})
           {:backoff, backoff, state}
+        else
+          Logger.warn("#{__MODULE__} connection failed after #{attempts} attempts")
+          {:stop, :max_attempts, state}
+        end
     end
   end
 
