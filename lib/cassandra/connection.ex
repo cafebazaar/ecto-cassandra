@@ -3,14 +3,11 @@ defmodule Cassandra.Connection do
 
   require Logger
 
+  alias Cassandra.Connection.Backoff
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
   alias CQL.Result.{Rows, Void, Prepared}
 
-  @backoff_init 500
-  @backoff_mult 1.6
-  @backoff_jitt 0.2
-  @backoff_max  12000
 
   @default_params %{
     consistency: :one,
@@ -76,7 +73,7 @@ defmodule Cassandra.Connection do
       streams: %{},
       last_stream_id: 1,
       socket: nil,
-      backoff: next_backoff,
+      backoff: Backoff.next,
       keyspace: keyspace,
       event_manager: manager,
       buffer: "",
@@ -91,7 +88,7 @@ defmodule Cassandra.Connection do
          :ok <- use_keyspace(socket, keyspace, timeout)
     do
       :inet.setopts(socket, [active: true])
-      {:ok, stream_all(%{state | socket: socket, backoff: next_backoff})}
+      {:ok, stream_all(%{state | socket: socket, backoff: Backoff.next})}
     else
       :stop ->
         {:stop, :handshake_error, state}
@@ -99,8 +96,9 @@ defmodule Cassandra.Connection do
         Logger.error("#{__MODULE__} #{message}")
         {:stop, :invalid_keyspace, state}
       _ ->
-        Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
-        {:backoff, state.backoff, update_in(state.backoff, &next_backoff/1)}
+          Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
+          {backoff, state} = get_and_update_in(state.backoff, &{&1, Backoff.next(&1)})
+          {:backoff, backoff, state}
     end
   end
 
@@ -339,12 +337,6 @@ defmodule Cassandra.Connection do
       error ->
         {:error, error}
     end
-  end
-
-  defp next_backoff(current \\ @backoff_init) do
-    next = current * @backoff_mult
-    jitt = (:rand.uniform - 0.5) * @backoff_jitt * current
-    round(min(next, @backoff_max) + jitt)
   end
 
   defp next_stream_id(32768), do: 2
