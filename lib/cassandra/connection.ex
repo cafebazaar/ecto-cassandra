@@ -14,7 +14,7 @@ defmodule Cassandra.Connection do
     timeout: 5000,
     max_attempts: :infinity,
     wait?: true,
-    listener: [],
+    listeners: [],
     keyspace: nil,
   ]
 
@@ -86,7 +86,7 @@ defmodule Cassandra.Connection do
 
     state =
       options
-      |> Keyword.take([:port, :timeout, :wait?, :keyspace, :max_attempts, :listener])
+      |> Keyword.take([:port, :timeout, :wait?, :keyspace, :max_attempts, :listeners])
       |> Enum.into(%{
         host: to_charlist(options[:host]),
         waiting: [],
@@ -143,7 +143,7 @@ defmodule Cassandra.Connection do
         Logger.error("#{__MODULE__} connection error #{message}")
     end
 
-    notify(state.listener, :disconnected)
+    notify(state.listeners, :disconnected)
 
     unless state.wait?, do: reply_all(state, {:error, :closed})
 
@@ -166,13 +166,13 @@ defmodule Cassandra.Connection do
 
   def terminate(_reason, %{socket: socket} = state) do
     reply_all(state, {:error, :closed})
-    notify(state.listener, :stopped)
+    notify(state.listeners, :stopped)
     unless is_nil(socket), do: TCP.close(socket)
   end
 
-  def handle_call({:add_listener, pid}, _from, %{listener: listener} = state) do
+  def handle_call({:add_listener, pid}, _from, %{listeners: listeners} = state) do
     unless is_nil(state.socket), do: send(pid, {:connected, self})
-    {:reply, :ok, %{state | listener: [pid | listener]}}
+    {:reply, :ok, %{state | listeners: [pid | listeners]}}
   end
 
   def handle_call(:options, from, state) do
@@ -357,13 +357,13 @@ defmodule Cassandra.Connection do
 
   defp after_connect(socket, state) do
     :inet.setopts(socket, [active: true])
-    notify(state.listener, :connected)
+    notify(state.listeners, :connected)
     Reconnection.reset(state.reconnection)
     {:ok, stream_all(%{state | socket: socket})}
   end
 
-  defp notify(listener, message) do
-    Enum.each(listener, &send(&1, {message, self}))
+  defp notify(listeners, message) do
+    Enum.each(listeners, &send(&1, {message, self}))
   end
 
   defp send_to(socket, request, id \\ 0) do
