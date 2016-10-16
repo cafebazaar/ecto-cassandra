@@ -26,13 +26,17 @@ defmodule CassandraTest do
     {:ok, %{conn: conn}}
   end
 
-  describe "#start_link" do
+  describe "#start" do
     @tag capture_log: true
     test ":max_attempts option" do
-      {:ok, conn} = Connection.start_link(port: 9111, max_attempts: 1)
-      Process.unlink(conn)
+      {:ok, conn} = Connection.start(port: 9111, max_attempts: 1)
       Process.monitor(conn)
       assert_receive {:DOWN, _, :process, ^conn, :max_attempts}
+    end
+
+    @tag capture_log: true
+    test ":blocking_init option" do
+      assert {:error, :connection_failed} = Connection.start(port: 9111, blocking_init: true)
     end
   end
 

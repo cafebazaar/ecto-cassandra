@@ -30,6 +30,10 @@ defmodule Cassandra.Connection do
 
   # Client API
 
+  def start(options \\ []) do
+    Connection.start(__MODULE__, options)
+  end
+
   def start_link(options \\ []) do
     Connection.start_link(__MODULE__, options)
   end
@@ -90,16 +94,20 @@ defmodule Cassandra.Connection do
       attempts: 1,
     }
 
-    {:connect, :init, state}
+    if options[:blocking_init] == true do
+      with {:ok, socket} <- try_connect(host, port, timeout, keyspace) do
+        after_connect(socket, state)
+      else
+        _ -> {:stop, :connection_failed}
+      end
+    else
+      {:connect, :init, state}
+    end
   end
 
   def connect(_info, state = %{host: host, port: port, timeout: timeout, keyspace: keyspace}) do
-    with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
-         :ok <- handshake(socket, timeout),
-         :ok <- use_keyspace(socket, keyspace, timeout)
-    do
-      :inet.setopts(socket, [active: true])
-      {:ok, stream_all(%{state | socket: socket, backoff: Backoff.next})}
+    with {:ok, socket} <- try_connect(host, port, timeout, keyspace) do
+      after_connect(socket, state)
     else
       :stop ->
         {:stop, :handshake_error, state}
@@ -303,6 +311,21 @@ defmodule Cassandra.Connection do
         |> Map.put(:last_stream_id, id)
         |> put_in([:streams, id], {request, from})
     end
+  end
+
+  defp try_connect(host, port, timeout, keyspace) do
+    with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false]),
+         :ok <- handshake(socket, timeout),
+         :ok <- use_keyspace(socket, keyspace, timeout)
+    do
+      {:ok, socket}
+    end
+  end
+
+  defp after_connect(socket, state) do
+    :inet.setopts(socket, [active: true])
+    Enum.each(state.monitors, &send(&1, {:connected, self}))
+    {:ok, stream_all(%{state | socket: socket, backoff: Backoff.next})}
   end
 
   defp send_to(socket, request, id \\ 0) do
