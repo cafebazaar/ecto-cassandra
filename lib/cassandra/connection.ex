@@ -3,10 +3,10 @@ defmodule Cassandra.Connection do
 
   require Logger
 
-  alias Cassandra.Connection.Backoff
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Options, Query, QueryParams, Error, Prepare, Execute, Register, Event}
   alias CQL.Result.{Rows, Void, Prepared}
+  alias Cassandra.Reconnection
 
   @defaults %{
     host: "127.0.0.1",
@@ -79,6 +79,11 @@ defmodule Cassandra.Connection do
     monitors     = Keyword.get(options, :monitors, [])
     wait?        = Keyword.get(options, :wait?, @defaults.wait?)
 
+    reconnection_policy = Keyword.get(options, :reconnection_policy, Cassandra.Reconnection.Exponential)
+    reconnection_args   = Keyword.get(options, :reconnection_args, [])
+
+    {:ok, reconnection} = Reconnection.start_link(reconnection_policy, reconnection_args)
+
     {:ok, manager} = GenEvent.start_link
 
     state = %{
@@ -90,13 +95,13 @@ defmodule Cassandra.Connection do
       streams: %{},
       last_stream_id: 1,
       socket: nil,
-      backoff: Backoff.init,
       keyspace: keyspace,
       event_manager: manager,
       buffer: "",
       max_attempts: max_attempts,
       attempts: 1,
       monitors: monitors,
+      reconnection: reconnection,
     }
 
     if options[:blocking_init?] == true do
@@ -122,8 +127,8 @@ defmodule Cassandra.Connection do
       _ ->
         {attempts, state} = get_and_update_in(state.attempts, &{&1, &1 + 1})
         if attempts < state.max_attempts do
-          Logger.warn("#{__MODULE__} connection failed, retrying in #{state.backoff}ms ...")
-          {backoff, state} = get_and_update_in(state.backoff, &{&1, Backoff.next(&1)})
+          backoff = Reconnection.next(state.reconnection)
+          Logger.warn("#{__MODULE__} connection failed, retrying in #{backoff}ms ...")
           {:backoff, backoff, state}
         else
           Logger.warn("#{__MODULE__} connection failed after #{attempts} attempts")
@@ -351,7 +356,8 @@ defmodule Cassandra.Connection do
   defp after_connect(socket, state) do
     :inet.setopts(socket, [active: true])
     Enum.each(state.monitors, &send(&1, {:connected, self}))
-    {:ok, stream_all(%{state | socket: socket, backoff: Backoff.init})}
+    Reconnection.reset(state.reconnection)
+    {:ok, stream_all(%{state | socket: socket})}
   end
 
   defp send_to(socket, request, id \\ 0) do
