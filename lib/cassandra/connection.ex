@@ -149,7 +149,7 @@ defmodule Cassandra.Connection do
     end
 
     Enum.each(state.monitors, &send(&1, {:disconnected, self}))
-    waiting = if state.waite_for_connection do
+    waiting = if state.wait? do
       Map.values(state.streams)
     else
       reply_all(state, {:error, :closed})
@@ -316,11 +316,11 @@ defmodule Cassandra.Connection do
     end
   end
 
-  defp stream(request, from, %{socket: nil, waite_for_connection: true} = state) do
+  defp stream(request, from, %{socket: nil, wait?: true} = state) do
     update_in(state.waiting, &[{request, from} | &1])
   end
 
-  defp stream(_, from, %{socket: nil, waite_for_connection: false} = state) do
+  defp stream(_, from, %{socket: nil, wait?: false} = state) do
     Connection.reply(from, {:error, :not_connected})
     state
   end
