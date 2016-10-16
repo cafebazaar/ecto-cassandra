@@ -13,6 +13,7 @@ defmodule Cassandra.Connection do
     port: 9042,
     timeout: 5000,
     max_attempts: :infinity,
+    wait?: true,
   }
 
   @call_timeout :infinity
@@ -70,11 +71,12 @@ defmodule Cassandra.Connection do
   # Connection Callbacks
 
   def init(options) do
-    host         = Keyword.get(options, :hostname, @defaults.host) |> to_charlist
+    host         = Keyword.get(options, :host, @defaults.host) |> to_charlist
     port         = Keyword.get(options, :port, @defaults.port)
     timeout      = Keyword.get(options, :timeout, @defaults.timeout)
     keyspace     = Keyword.get(options, :keyspace)
     max_attempts = Keyword.get(options, :max_attempts, @defaults.max_attempts)
+    wait?        = Keyword.get(options, :wait?, @defaults.wait?)
 
     {:ok, manager} = GenEvent.start_link
 
@@ -83,6 +85,7 @@ defmodule Cassandra.Connection do
       port: port,
       timeout: timeout,
       waiting: [],
+      wait?: wait?,
       streams: %{},
       last_stream_id: 1,
       socket: nil,
@@ -94,7 +97,7 @@ defmodule Cassandra.Connection do
       attempts: 1,
     }
 
-    if options[:blocking_init] == true do
+    if options[:blocking_init?] == true do
       with {:ok, socket} <- try_connect(host, port, timeout, keyspace) do
         after_connect(socket, state)
       else
@@ -129,6 +132,7 @@ defmodule Cassandra.Connection do
 
   def disconnect(info, %{socket: socket} = state) do
     :ok = TCP.close(socket)
+
     case info do
       {:error, :closed} ->
         Logger.error("#{__MODULE__} connection closed")
@@ -136,21 +140,20 @@ defmodule Cassandra.Connection do
         message = :inet.format_error(reason)
         Logger.error("#{__MODULE__} connection error #{message}")
     end
-    next_state = %{state |
-      waiting: Map.values(state.streams),
-      streams: %{},
-      last_stream_id: 1,
-      socket: nil,
-    }
+
+    waiting = if state.waite_for_connection do
+      Map.values(state.streams)
+    else
+      reply_all(state, {:error, :closed})
+      []
+    end
+
+    next_state = %{state | waiting: waiting, streams: %{}, last_stream_id: 1, socket: nil}
     {:connect, :reconnect, next_state}
   end
 
   def terminate(_reason, %{socket: socket} = state) do
-    state.streams
-    |> Map.values
-    |> Enum.concat(state.waiting)
-    |> Enum.each(fn {_, from} -> Connection.reply(from, {:error, :stopped}) end)
-
+    reply_all(state, {:error, :closed})
     unless is_nil(socket), do: TCP.close(socket)
   end
 
@@ -297,8 +300,13 @@ defmodule Cassandra.Connection do
     end
   end
 
-  defp stream(request, from, %{socket: nil} = state) do
+  defp stream(request, from, %{socket: nil, waite_for_connection: true} = state) do
     update_in(state.waiting, &[{request, from} | &1])
+  end
+
+  defp stream(_, from, %{socket: nil, waite_for_connection: false} = state) do
+    Connection.reply(from, {:error, :not_connected})
+    state
   end
 
   defp stream(request, from, %{socket: socket, last_stream_id: id} = state) do
@@ -311,6 +319,13 @@ defmodule Cassandra.Connection do
         |> Map.put(:last_stream_id, id)
         |> put_in([:streams, id], {request, from})
     end
+  end
+
+  defp reply_all(%{streams: streams, waiting: waiting}, message) do
+    streams
+    |> Map.values
+    |> Enum.concat(waiting)
+    |> Enum.each(fn {_, from} -> Connection.reply(from, message) end)
   end
 
   defp try_connect(host, port, timeout, keyspace) do

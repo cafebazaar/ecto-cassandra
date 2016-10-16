@@ -36,7 +36,7 @@ defmodule CassandraTest do
 
     @tag capture_log: true
     test ":blocking_init option" do
-      assert {:error, :connection_failed} = Connection.start(port: 9111, blocking_init: true)
+      assert {:error, :connection_failed} = Connection.start(port: 9111, blocking_init?: true)
     end
   end
 
