@@ -8,13 +8,15 @@ defmodule Cassandra.Connection do
   alias CQL.Result.{Rows, Void, Prepared}
   alias Cassandra.Reconnection
 
-  @defaults %{
+  @default_options [
     host: "127.0.0.1",
     port: 9042,
     timeout: 5000,
     max_attempts: :infinity,
     wait?: true,
-  }
+    listener: [],
+    keyspace: nil,
+  ]
 
   @call_timeout :infinity
 
@@ -25,6 +27,8 @@ defmodule Cassandra.Connection do
     paging_state: nil,
     serial_consistency: nil,
     timestamp: nil,
+    reconnection_policy: Cassandra.Reconnection.Exponential,
+    reconnection_args: [],
   }
 
   @valid_params Map.keys(@default_params)
@@ -71,13 +75,7 @@ defmodule Cassandra.Connection do
   # Connection Callbacks
 
   def init(options) do
-    host         = Keyword.get(options, :host, @defaults.host) |> to_charlist
-    port         = Keyword.get(options, :port, @defaults.port)
-    timeout      = Keyword.get(options, :timeout, @defaults.timeout)
-    keyspace     = Keyword.get(options, :keyspace)
-    max_attempts = Keyword.get(options, :max_attempts, @defaults.max_attempts)
-    monitors     = Keyword.get(options, :monitors, [])
-    wait?        = Keyword.get(options, :wait?, @defaults.wait?)
+    options = Keyword.merge(@default_options, options)
 
     reconnection_policy = Keyword.get(options, :reconnection_policy, Cassandra.Reconnection.Exponential)
     reconnection_args   = Keyword.get(options, :reconnection_args, [])
@@ -86,26 +84,23 @@ defmodule Cassandra.Connection do
 
     {:ok, manager} = GenEvent.start_link
 
-    state = %{
-      host: host,
-      port: port,
-      timeout: timeout,
-      waiting: [],
-      wait?: wait?,
-      streams: %{},
-      last_stream_id: 1,
-      socket: nil,
-      keyspace: keyspace,
-      event_manager: manager,
-      buffer: "",
-      max_attempts: max_attempts,
-      attempts: 1,
-      monitors: monitors,
-      reconnection: reconnection,
-    }
+    state =
+      options
+      |> Keyword.take([:port, :timeout, :wait?, :keyspace, :max_attempts, :listener])
+      |> Enum.into(%{
+        host: to_charlist(options[:host]),
+        waiting: [],
+        streams: %{},
+        last_stream_id: 1,
+        socket: nil,
+        event_manager: manager,
+        buffer: "",
+        attempts: 1,
+        reconnection: reconnection,
+      })
 
     if options[:blocking_init?] == true do
-      with {:ok, socket} <- try_connect(host, port, timeout, keyspace) do
+      with {:ok, socket} <- try_connect(state.host, state.port, state.timeout, state.keyspace) do
         after_connect(socket, state)
       else
         _ -> {:stop, :connection_failed}
@@ -148,29 +143,36 @@ defmodule Cassandra.Connection do
         Logger.error("#{__MODULE__} connection error #{message}")
     end
 
-    Enum.each(state.monitors, &send(&1, {:disconnected, self}))
+    notify(state.listener, :disconnected)
+
+    unless state.wait?, do: reply_all(state, {:error, :closed})
+
     waiting = if state.wait? do
       Map.values(state.streams)
     else
-      reply_all(state, {:error, :closed})
       []
     end
 
-    next_state = %{state | waiting: waiting, streams: %{}, last_stream_id: 1, socket: nil}
+    next_state = %{
+      state |
+      waiting: waiting,
+      streams: %{},
+      last_stream_id: 1,
+      socket: nil,
+    }
+
     {:connect, :reconnect, next_state}
   end
 
   def terminate(_reason, %{socket: socket} = state) do
     reply_all(state, {:error, :closed})
-    Enum.each(state.monitors, &send(&1, {:stopped, self}))
+    notify(state.listener, :stopped)
     unless is_nil(socket), do: TCP.close(socket)
   end
 
-  def handle_call({:add_monitor, pid}, _from, %{monitors: monitors} = state) do
-    unless is_nil(state.socket) do
-      send(pid, {:connected, self})
-    end
-    {:reply, :ok, %{state | monitors: [pid | monitors]}}
+  def handle_call({:add_listener, pid}, _from, %{listener: listener} = state) do
+    unless is_nil(state.socket), do: send(pid, {:connected, self})
+    {:reply, :ok, %{state | listener: [pid | listener]}}
   end
 
   def handle_call(:options, from, state) do
@@ -355,9 +357,13 @@ defmodule Cassandra.Connection do
 
   defp after_connect(socket, state) do
     :inet.setopts(socket, [active: true])
-    Enum.each(state.monitors, &send(&1, {:connected, self}))
+    notify(state.listener, :connected)
     Reconnection.reset(state.reconnection)
     {:ok, stream_all(%{state | socket: socket})}
+  end
+
+  defp notify(listener, message) do
+    Enum.each(listener, &send(&1, {message, self}))
   end
 
   defp send_to(socket, request, id \\ 0) do
