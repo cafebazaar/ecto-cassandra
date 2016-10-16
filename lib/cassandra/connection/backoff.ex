@@ -4,7 +4,9 @@ defmodule Cassandra.Connection.Backoff do
   @jitt 0.2
   @max  12000
 
-  def next(current \\ @init) do
+  def init, do: @init
+
+  def next(current) do
     next = current * @mult
     jitt = (:rand.uniform - 0.5) * @jitt * current
     round(min(next, @max) + jitt)

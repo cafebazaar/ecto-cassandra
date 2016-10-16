@@ -90,7 +90,7 @@ defmodule Cassandra.Connection do
       streams: %{},
       last_stream_id: 1,
       socket: nil,
-      backoff: Backoff.next,
+      backoff: Backoff.init,
       keyspace: keyspace,
       event_manager: manager,
       buffer: "",
@@ -351,7 +351,7 @@ defmodule Cassandra.Connection do
   defp after_connect(socket, state) do
     :inet.setopts(socket, [active: true])
     Enum.each(state.monitors, &send(&1, {:connected, self}))
-    {:ok, stream_all(%{state | socket: socket, backoff: Backoff.next})}
+    {:ok, stream_all(%{state | socket: socket, backoff: Backoff.init})}
   end
 
   defp send_to(socket, request, id \\ 0) do
