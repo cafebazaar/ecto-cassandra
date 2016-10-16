@@ -91,6 +91,13 @@ defmodule CassandraTest do
       assert {:ok, _} =
         Connection.query conn, "SELECT * FROM system.local;"
     end
+
+    test "handles nil values", %{conn: conn} do
+      assert {:ok, _} =
+        Connection.query conn, "INSERT INTO users (id, name, age) VALUES (uuid(), 'Jack', 121);"
+      assert {:ok, [%{"address" => nil}]} =
+        Connection.query conn, "SELECT * FROM users;"
+    end
   end
 
   describe "#register" do

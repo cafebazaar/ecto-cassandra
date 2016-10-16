@@ -63,6 +63,10 @@ defmodule CQL.DataTypes.Decoder do
     buffer |> short |> string_list
   end
 
+  def bytes({len, buffer}) when is_integer(len) and len < 0 do
+    {nil, buffer}
+  end
+
   def bytes({len, buffer}) do
     <<str::bytes-size(len), rest::bytes>> = buffer
     {str, rest}
@@ -236,6 +240,7 @@ defmodule CQL.DataTypes.Decoder do
     func.(buffer)
   end
 
+  defp dec(nil,    _         ), do: {nil, ""}
   defp dec(buffer, :ascii    ), do: {buffer, ""}
   defp dec(buffer, :bigint   ), do: long(buffer)
   defp dec(buffer, :blob     ), do: {buffer, ""}
