@@ -200,13 +200,13 @@ defmodule Cassandra.Connection do
 
   defp handle_data(data, %{buffer: buffer} = state) do
     case CQL.decode(buffer <> data) do
-      {%Frame{stream: id} = frame, buffer} ->
+      {%Frame{stream: id} = frame, rest} ->
         next_state = case id do
           -1 -> handle_event(frame, state)
            0 -> state
            _ -> handle_response(frame, state)
         end
-        handle_data(buffer, next_state)
+        handle_data(rest, %{next_state | buffer: ""})
       {nil, buffer} ->
         {:noreply, %{state | buffer: buffer}}
     end

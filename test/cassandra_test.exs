@@ -82,6 +82,15 @@ defmodule CassandraTest do
       assert {:error, {:invalid, "Query string can not contain bind marker `?`, use parepare instead"}} =
         Connection.query conn, "INSERT INTO users (id, name) VALUES (?, ?);"
     end
+
+    test "handles large results repeatedly", %{conn: conn} do
+      assert {:ok, _} =
+        Connection.query conn, "SELECT * FROM system.local;"
+      assert {:ok, _} =
+        Connection.query conn, "SELECT * FROM system.local;"
+      assert {:ok, _} =
+        Connection.query conn, "SELECT * FROM system.local;"
+    end
   end
 
   describe "#register" do
