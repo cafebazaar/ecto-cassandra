@@ -76,6 +76,7 @@ defmodule Cassandra.Connection do
     timeout      = Keyword.get(options, :timeout, @defaults.timeout)
     keyspace     = Keyword.get(options, :keyspace)
     max_attempts = Keyword.get(options, :max_attempts, @defaults.max_attempts)
+    monitors     = Keyword.get(options, :monitors, [])
     wait?        = Keyword.get(options, :wait?, @defaults.wait?)
 
     {:ok, manager} = GenEvent.start_link
@@ -95,6 +96,7 @@ defmodule Cassandra.Connection do
       buffer: "",
       max_attempts: max_attempts,
       attempts: 1,
+      monitors: monitors,
     }
 
     if options[:blocking_init?] == true do
@@ -141,6 +143,7 @@ defmodule Cassandra.Connection do
         Logger.error("#{__MODULE__} connection error #{message}")
     end
 
+    Enum.each(state.monitors, &send(&1, {:disconnected, self}))
     waiting = if state.waite_for_connection do
       Map.values(state.streams)
     else
@@ -154,7 +157,15 @@ defmodule Cassandra.Connection do
 
   def terminate(_reason, %{socket: socket} = state) do
     reply_all(state, {:error, :closed})
+    Enum.each(state.monitors, &send(&1, {:stopped, self}))
     unless is_nil(socket), do: TCP.close(socket)
+  end
+
+  def handle_call({:add_monitor, pid}, _from, %{monitors: monitors} = state) do
+    unless is_nil(state.socket) do
+      send(pid, {:connected, self})
+    end
+    {:reply, :ok, %{state | monitors: [pid | monitors]}}
   end
 
   def handle_call(:options, from, state) do
