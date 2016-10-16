@@ -24,4 +24,3 @@ defmodule Cassandra.Reconnection.Exponential do
     end
   end
 end
-
