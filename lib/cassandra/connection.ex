@@ -45,7 +45,7 @@ defmodule Cassandra.Connection do
     ref
   end
 
-  def send_fail?({:ok, ref}), do: false
+  def send_fail?({:ok, _}), do: false
   def send_fail?({:error, {_, _}}), do: false # is cql error
   def send_fail?({:error, _}), do: true # is connection error
 
@@ -220,7 +220,7 @@ defmodule Cassandra.Connection do
       from ->
         {:ok, manager} = GenEvent.start_link
         stream = GenEvent.stream(manager)
-        reply(from, id, {:stream, stream})
+        Connection.reply(from, {:stream, stream})
         manager
     end
 
@@ -238,7 +238,7 @@ defmodule Cassandra.Connection do
         GenEvent.stop(manager)
 
       from ->
-        reply(from, id, {:ok, data})
+        Connection.reply(from, {:ok, data})
     end
     {:ok, next_state}
   end
@@ -265,7 +265,7 @@ defmodule Cassandra.Connection do
       response ->
         {:ok, response}
     end
-    reply(from, id, response)
+    Connection.reply(from, response)
     {:ok, next_state}
   end
 
@@ -317,22 +317,6 @@ defmodule Cassandra.Connection do
         Connection.reply(from, {:error, message})
         {:error, reason}
     end
-  end
-
-  defp reply({:gen_server, pid, from}, id) do
-    GenServer.reply(from, {:id, id})
-  end
-
-  defp reply(_, _) do
-    :ok
-  end
-
-  defp reply({:gen_server, pid, _}, id, response) do
-    GenServer.call(pid, {:response, {id, response}})
-  end
-
-  defp reply(from, id, response) do
-    Connection.reply(from, response)
   end
 
   defp reply_all(%{streams: streams}, message) do

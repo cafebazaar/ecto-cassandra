@@ -136,7 +136,7 @@ defmodule Cassandra.Cluster do
     end
   end
 
-  defp start_connection({address, port}, options) do 
+  defp start_connection({address, port}, options) do
     start_connection(address, Keyword.put(options, :port, port))
   end
 

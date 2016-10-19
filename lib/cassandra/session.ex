@@ -49,7 +49,6 @@ defmodule Cassandra.Session do
   end
 
   def handle_call({:send, request}, from, %{connections: connections, balancer: balancer} = state) do
-    IO.inspect balancer
     case CQL.encode(request) do
       :error ->
         {:reply, {:error, :encode_error}, state}
@@ -59,8 +58,6 @@ defmodule Cassandra.Session do
           |> Enum.filter(&open?/1)
           |> LoadBalancing.select(balancer, request)
           |> Enum.map(&elem(&1, 0))
-
-        selected_connections
 
         Task.start(Worker, :send_request, [from, selected_connections, request, encoded, &retry?/1])
 
@@ -121,21 +118,6 @@ defmodule Cassandra.Session do
     {:noreply, %{state | connections: connections}}
   end
 
-  defp filter_map(connections) do
-    connections =
-      connections
-      |> Enum.filter_map(&started?/1, &drop_ok/1)
-
-    connections
-    |> Enum.map(&key/1)
-    |> Enum.each(&Process.monitor(&1))
-
-    connections =
-      connections
-      |> Enum.map(&status_key_value(&1, :close))
-      |> Enum.into(%{})
-  end
-
   def handle_info({:DOWN, _ref, :process, conn, _reason}, %{connections: connections} = state) do
     Logger.warn("#{__MODULE__} connection lost")
     connections = Map.delete(connections, conn)
@@ -172,8 +154,6 @@ defmodule Cassandra.Session do
 
   defp key({k, _}), do: k
 
-  defp value({_, v}), do: v
-
   defp connections_to(conns, host) do
     Enum.filter(conns, fn {_, {h, _}} -> h.id == host.id end)
   end
@@ -184,21 +164,16 @@ defmodule Cassandra.Session do
     |> Enum.count
   end
 
-  defp send_request([], _, _) do
-    {:error, :no_more_connections}
-  end
+  defp filter_map(connections) do
+    connections = Enum.filter_map(connections, &started?/1, &drop_ok/1)
 
-  defp send_request([conn | connections], request, encoded) do
-    result = Cassandra.Connection.send_async(conn, encoded)
-    if send_fail?(result) do
-      if retry?(request) do
-        send_request(connections, request, encoded)
-      else
-        {:error, :failed_in_retry_policy}
-      end
-    else
-      {:ok, result}
-    end
+    connections
+    |> Enum.map(&key/1)
+    |> Enum.each(&Process.monitor(&1))
+
+    connections
+    |> Enum.map(&status_key_value(&1, :close))
+    |> Enum.into(%{})
   end
 
   defp retry?(_request), do: true

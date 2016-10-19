@@ -55,7 +55,7 @@ defmodule Cassandra.Host do
       rack: rack,
       release_version: release_version,
       schema_version: schema_version,
-      # tokens: tokens,
+      tokens: tokens,
     }
     {:ok, host}
   end
