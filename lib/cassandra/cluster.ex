@@ -99,11 +99,11 @@ defmodule Cassandra.Cluster do
     {:reply, state.hosts, state}
   end
 
-  def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     Logger.warn("#{__MODULE__} control connection lost")
     contact_points = Map.keys(state.hosts)
 
-    with {:ok, conn, address, local} <- setup(contact_points, state.options),
+    with {:ok, conn, _local} <- setup(contact_points, state.options),
          {:ok, :ready} <- Cassandra.Connection.send(conn, @register_events)
     do
       Logger.warn("#{__MODULE__} new control connection opened")
