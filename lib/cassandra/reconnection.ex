@@ -1,6 +1,12 @@
 defmodule Cassandra.Reconnection do
   alias Cassandra.Reconnection.Policy
 
+  def start_link(options) do
+    module = Keyword.fetch!(options, :reconnection_policy)
+    args = Keyword.fetch!(options, :reconnection_args)
+    start_link(module, args)
+  end
+
   def start_link(module, args) do
     Agent.start_link(fn -> struct(module, args) end)
   end
