@@ -8,14 +8,18 @@ defmodule CQL.Event do
 
     info = case type do
       "TOPOLOGY_CHANGE" ->
-        unpack buffer,
+        {info, ""} = unpack buffer,
           change: :string,
           address: :inet
 
+        info
+
       "STATUS_CHANGE" ->
-        unpack buffer,
+        {info, ""} = unpack buffer,
           change: :string,
           address: :inet
+
+        info
 
       "SCHEMA_CHANGE" ->
         {info, buffer} = unpack buffer,
