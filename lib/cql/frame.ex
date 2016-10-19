@@ -45,4 +45,10 @@ defmodule CQL.Frame do
   end
 
   def decode(buffer), do: {nil, buffer}
+
+  def set_stream_id(<<prefix::bits-16, _::signed-integer-16, rest::binary>>, id) do
+    {:ok, <<prefix::bits-16, id::signed-integer-16, rest::binary>>}
+  end
+
+  def set_stream_id(_, _), do: :error
 end

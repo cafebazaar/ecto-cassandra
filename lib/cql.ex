@@ -27,4 +27,6 @@ defmodule CQL do
         :error
     end
   end
+
+  defdelegate set_stream_id(request, id), to: CQL.Frame
 end
