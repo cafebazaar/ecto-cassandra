@@ -88,6 +88,13 @@ defmodule CQL.DataTypes.Decoder do
     {{a, b, c, d, e, f}, ""}
   end
 
+  def inet(buffer) do
+    {n,    buffer} = byte(buffer)
+    {ip,   buffer} = ntimes(n, :byte, buffer)
+    {port, buffer} = int(buffer)
+    {{List.to_tuple(ip), port}, buffer}
+  end
+
   def string_map({n, buffer}) do
     key_value = fn buf ->
       {key, buf} = string(buf)
