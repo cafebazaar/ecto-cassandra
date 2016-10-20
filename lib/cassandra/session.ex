@@ -3,13 +3,15 @@ defmodule Cassandra.Session do
 
   require Logger
 
-  alias Cassandra.{Cluster, Host, LoadBalancing}
+  alias Cassandra.{Cluster, Host, LoadBalancing, Reconnection}
   alias Cassandra.Session.Worker
 
   @defaults [
-    reconnection_policy: Cassandra.Reconnection.Exponential,
+    reconnection_policy: Reconnection.Exponential,
     reconnection_args: [],
   ]
+
+  @default_balancer %LoadBalancing.RoundRobin{}
 
   ### Client API ###
 
@@ -30,6 +32,8 @@ defmodule Cassandra.Session do
       |> Keyword.merge(options)
       |> Keyword.put(:session, self)
 
+    {balancer, options} = Keyword.pop(options, :balancer, @default_balancer)
+
     Cluster.register(cluster, self)
 
     send self, :connect
@@ -37,8 +41,8 @@ defmodule Cassandra.Session do
     state = %{
       cluster: cluster,
       options: options,
+      balancer: balancer,
       connections: %{},
-      balancer: %Cassandra.LoadBalancing.RoundRobin{num_connections: 2},
     }
 
     {:ok, state}
@@ -52,6 +56,7 @@ defmodule Cassandra.Session do
     case CQL.encode(request) do
       :error ->
         {:reply, {:error, :encode_error}, state}
+
       encoded ->
         selected_connections =
           connections
