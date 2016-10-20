@@ -13,7 +13,7 @@ defmodule Cassandra.Connection do
     port: 9042,
     connect_timeout: 5000,
     timeout: :infinity,
-    reconnection_policy: Cassandra.Reconnection.Exponential,
+    reconnection_policy: Reconnection.Exponential,
     reconnection_args: [],
     session: nil,
     event_manager: nil,
@@ -25,11 +25,13 @@ defmodule Cassandra.Connection do
   # Client API
 
   def start(options \\ []) do
-    Connection.start(__MODULE__, options)
+    {name, options} = Keyword.pop(options, :name)
+    Connection.start(__MODULE__, options, [name: name])
   end
 
   def start_link(options \\ []) do
-    Connection.start_link(__MODULE__, options)
+    {name, options} = Keyword.pop(options, :name)
+    Connection.start_link(__MODULE__, options, [name: name])
   end
 
   def send(connection, request, timeout \\ @call_timeout) do
