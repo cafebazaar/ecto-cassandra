@@ -1,12 +1,10 @@
 defmodule DataTypesIntegrationTest do
   use ExUnit.Case
 
-  alias Cassandra.Connection
-  alias UUID
+  alias Cassandra.ConnectionTest, as: Conn
 
   setup_all do
-    {:ok, connection} = Connection.start_link(keyspace: "elixir_cassandra_test")
-    {:ok, _} = Connection.query connection, """
+    {:ok, _} = Conn.query """
       CREATE TABLE data_types (
         f_ascii     ascii,
         f_bigint    bigint,
@@ -35,16 +33,16 @@ defmodule DataTypesIntegrationTest do
         PRIMARY KEY (f_timeuuid, f_timestamp, f_uuid)
       );
     """
-    {:ok, %{connection: connection}}
+    :ok
   end
 
-  setup %{connection: connection} do
-    Connection.query(connection, "TRUNCATE data_types;")
-    {:ok, %{connection: connection}}
+  setup do
+    Conn.query("TRUNCATE data_types;")
+    :ok
   end
 
-  test "DATA TYPES", %{connection: connection} do
-    {:ok, prepared} = Connection.prepare connection, """
+  test "DATA TYPES" do
+    {:ok, prepared} = Conn.prepare """
       INSERT INTO data_types (
         f_ascii,
         f_bigint,
@@ -124,10 +122,10 @@ defmodule DataTypesIntegrationTest do
       f_set: MapSet.new([10, 20, 10, 20, 30]),
     }
 
-    assert {:ok, :done} = Connection.execute(connection, prepared, data)
+    assert {:ok, :done} = Conn.execute(prepared, data)
 
-    assert {:ok, [result]} = Connection.query(connection, "SELECT * FROM data_types LIMIT 1;")
-    
+    assert {:ok, [result]} = Conn.query("SELECT * FROM data_types LIMIT 1;")
+
     assert true =
       result
       |> Map.values
