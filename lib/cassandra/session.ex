@@ -24,6 +24,10 @@ defmodule Cassandra.Session do
     GenServer.cast(session, {:notify, message})
   end
 
+  def send(session, request) do
+    GenServer.call(session, {:send, request})
+  end
+
   ### GenServer Callbacks ###
 
   def init([cluster, options]) do
@@ -36,7 +40,7 @@ defmodule Cassandra.Session do
 
     Cluster.register(cluster, self)
 
-    send self, :connect
+    Kernel.send(self, :connect)
 
     state = %{
       cluster: cluster,
