@@ -34,9 +34,10 @@ defmodule Cassandra.Cluster.Registery do
     end
   end
 
-  def host_down({ip, _}, hosts), do: host_down(ip, hosts)
-  def host_down(ip, hosts) do
+  def host_down({ip, _}, hosts, sessions), do: host_down(ip, hosts, sessions)
+  def host_down(ip, hosts, sessions) do
     if Map.has_key?(hosts, ip) do
+      notify(sessions, :host_down, hosts[ip])
       Logger.info("#{__MODULE__} host #{inspect ip} is down")
       put_in(hosts[ip].status, :down)
     else
@@ -47,7 +48,7 @@ defmodule Cassandra.Cluster.Registery do
 
   defp notify(sessions, change, host) do
     for session <- sessions do
-      Session.notify(session, {change, host})
+      Session.notify(session, {change, host.id})
     end
   end
 end

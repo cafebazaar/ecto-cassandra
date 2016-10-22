@@ -82,7 +82,7 @@ defmodule Cassandra.Cluster do
         Registery.host_up(address, hosts, sessions)
 
       {:host_down, address} ->
-        Registery.host_down(address, hosts)
+        Registery.host_down(address, hosts, sessions)
 
       :not_related ->
         hosts
