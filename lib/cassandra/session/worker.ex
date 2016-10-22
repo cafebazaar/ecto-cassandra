@@ -12,12 +12,17 @@ defmodule Cassandra.Session.Worker do
 
     if Cassandra.Connection.send_fail?(result) do
       if retry?.(request) do
-        send_request(from, conns, request, encoded, retry?)
+        send_request(request, encoded, from, conns, retry?)
       else
-        GenServer.reply(from, {:error, :failed_in_retry_policy})
+        reply(from, {:error, :failed_in_retry_policy})
       end
     else
-      GenServer.reply(from, result)
+      reply(from, result)
     end
+  end
+
+  defp reply(nil, _), do: :ok
+  defp reply(from, reply) do
+    GenServer.reply(from, reply)
   end
 end
