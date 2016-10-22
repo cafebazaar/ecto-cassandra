@@ -66,8 +66,14 @@ defmodule Cassandra.Connection do
       |> Reconnection.start_link
 
     host = case options[:host] do
+      %Host{ip: ip} -> ip
       address when is_bitstring(address) -> to_charlist(address)
       inet -> inet
+    end
+
+    host_id = case options[:host] do
+      %Host{id: id} -> id
+      _ -> nil
     end
 
     state =
@@ -75,6 +81,7 @@ defmodule Cassandra.Connection do
       |> Keyword.take([:port, :connect_timeout, :timeout, :session, :event_manager])
       |> Enum.into(%{
         host: host,
+        host_id: host_id,
         streams: %{},
         last_stream_id: 1,
         socket: nil,
@@ -278,22 +285,6 @@ defmodule Cassandra.Connection do
     {:ok, next_state}
   end
 
-  # defp params(values, options) do
-  #   params =
-  #     options
-  #     |> Keyword.take(@valid_params)
-  #     |> Enum.into(@default_params)
-  #     |> Map.put(:values, values)
-
-  #   struct(QueryParams, params)
-  # end
-
-  # defp stream_all(state) do
-  #   Enum.reduce state.waiting, state, fn
-  #     ({request, from}, state) -> stream(request, from, state)
-  #   end
-  # end
-
   defp send_request(_, from, %{socket: nil} = state) do
     Connection.reply(from, {:error, :not_connected})
     {:ok, state}
@@ -332,10 +323,6 @@ defmodule Cassandra.Connection do
     streams
     |> Map.values
     |> Enum.each(fn {_, from} -> Connection.reply(from, message) end)
-  end
-
-  defp startup(%Host{ip: ip}, port, connect_timeout, timeout) do
-    startup(ip, port, connect_timeout, timeout)
   end
 
   defp startup(host, port, connect_timeout, timeout) do
@@ -397,8 +384,9 @@ defmodule Cassandra.Connection do
   end
 
   defp notify(%{session: nil}, _), do: :ok
-  defp notify(%{session: session, host: host}, message) do
-    Session.notify(session, {message, {host, self}})
+  defp notify(%{host_id: nil}, _), do: :ok
+  defp notify(%{session: session, host_id: id}, message) do
+    Session.notify(session, {message, {id, self}})
   end
 
   defp next_stream_id(32768), do: 2
