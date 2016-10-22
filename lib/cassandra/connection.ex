@@ -5,7 +5,7 @@ defmodule Cassandra.Connection do
 
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Event, Error}
-  alias CQL.Result.{Rows, Void}
+  alias CQL.Result.{Rows, Void, Prepared}
   alias Cassandra.{Session, Reconnection, Host}
 
   @default_options [
@@ -256,14 +256,21 @@ defmodule Cassandra.Connection do
   end
 
   defp handle_response(%Frame{stream: id, body: body}, state) do
-    {{_, from}, next_state} = pop_in(state.streams[id])
+    {{request, from}, next_state} = pop_in(state.streams[id])
     response = case body do
       %Error{message: message, code: code} ->
         {:error, {code, message}}
+
       %Ready{} ->
         {:ok, :ready}
+
       %Void{} ->
         {:ok, :done}
+
+      %Prepared{} = prepared ->
+        notify(state, {:prepared, :crypto.hash(:md5, request), prepared})
+        {:ok, prepared}
+
       response ->
         {:ok, response}
     end
