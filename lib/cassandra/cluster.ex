@@ -12,12 +12,12 @@ defmodule Cassandra.Cluster do
 
   ### Client API ###
 
-  def start(contact_points \\ ["127.0.0.1"], options \\ []) do
-    GenServer.start(__MODULE__, [contact_points, options])
+  def start(contact_points \\ ["127.0.0.1"], options \\ [], opts \\ []) do
+    GenServer.start(__MODULE__, [contact_points, options], opts)
   end
 
-  def start_link(contact_points \\ ["127.0.0.1"], options \\ []) do
-    GenServer.start(__MODULE__, [contact_points, options])
+  def start_link(contact_points \\ ["127.0.0.1"], options \\ [], opts \\ []) do
+    GenServer.start(__MODULE__, [contact_points, options], opts)
   end
 
   def hosts(cluster) do

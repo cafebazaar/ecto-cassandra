@@ -15,9 +15,8 @@ defmodule Cassandra.Session do
 
   ### Client API ###
 
-  def start_link(cluster, options \\ []) do
-    {name, options} = Keyword.pop(options, :name)
-    GenServer.start_link(__MODULE__, [cluster, options], [name: name])
+  def start_link(cluster, options \\ [], opts \\ []) do
+    GenServer.start_link(__MODULE__, [cluster, options], opts)
   end
 
   def notify(session, message) do
