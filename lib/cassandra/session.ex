@@ -42,7 +42,9 @@ defmodule Cassandra.Session do
       cluster: cluster,
       options: options,
       balancer: balancer,
+      retry: &retry?/1,
       connections: %{},
+      requests: [],
     }
 
     {:ok, state}
@@ -52,21 +54,18 @@ defmodule Cassandra.Session do
     {:reply, state, state}
   end
 
-  def handle_call({:send, request}, from, %{connections: connections, balancer: balancer} = state) do
+  def handle_call({:send, request}, from, %{connections: connections} = state) do
     case CQL.encode(request) do
       :error ->
         {:reply, {:error, :encode_error}, state}
 
       encoded ->
-        selected_connections =
-          connections
-          |> Enum.filter(&open?/1)
-          |> LoadBalancing.select(balancer, request)
-          |> Enum.map(&elem(&1, 0))
-
-        Task.start(Worker, :send_request, [from, selected_connections, request, encoded, &retry?/1])
-
-        {:noreply, state}
+        if Enum.count(connections) < 1 do
+          {:noreply, %{state | requests: [{from, request, encoded} | state.requests]}}
+        else
+          start_task({from, request, encoded}, state)
+          {:noreply, state}
+        end
     end
   end
 
@@ -85,7 +84,14 @@ defmodule Cassandra.Session do
         Logger.warn("#{__MODULE__} unhandled notify #{inspect other}")
         conns
     end
-    {:noreply, %{state | connections: connections}}
+
+    if change == :connection_opened do
+      state.requests
+      |> Enum.reverse
+      |> Enum.each(&start_task(&1, state))
+    end
+
+    {:noreply, %{state | connections: connections, requests: []}}
   end
 
   def handle_cast({:notify, {change, %Host{} = host}}, %{connections: conns, balancer: balancer} = state) do
@@ -131,6 +137,19 @@ defmodule Cassandra.Session do
 
   ### Helpers ###
 
+  defp select(request, connections, balancer) do
+    connections
+    |> Enum.filter_map(&open?/1, &drop_status/1)
+    |> LoadBalancing.select(balancer, request)
+    |> Enum.map(&key/1)
+  end
+
+  defp start_task({from, request, encoded}, %{connections: connections, balancer: balancer, retry: retry}) do
+    conns = select(request, connections, balancer)
+
+    Task.start(Worker, :send_request, [request, encoded, from, conns, retry])
+  end
+
   defp start_connections(host, n, options) when is_integer(n) and n > 0 do
     Enum.map(1..n, fn _ -> start_connection(host, options) end)
   end
@@ -151,11 +170,13 @@ defmodule Cassandra.Session do
 
   defp drop_ok({{:ok, conn}, host}), do: {conn, host}
 
-  defp status_key_value({conn, host}, status), do: {conn, {host, status}}
+  defp put_status({conn, host}, status), do: {conn, {host, status}}
 
-  defp status({_, {_, status}}), do: status
+  defp drop_status({conn, {host, _}}), do: {conn, host}
 
-  defp open?(kv), do: status(kv) == :open
+  defp get_status({_, {_, status}}), do: status
+
+  defp open?(kv), do: get_status(kv) == :open
 
   defp key({k, _}), do: k
 
@@ -177,7 +198,7 @@ defmodule Cassandra.Session do
     |> Enum.each(&Process.monitor(&1))
 
     connections
-    |> Enum.map(&status_key_value(&1, :close))
+    |> Enum.map(&put_status(&1, :close))
     |> Enum.into(%{})
   end
 
