@@ -35,6 +35,10 @@ defmodule Cassandra do
       def send(request) do
         Session.send(@session, request)
       end
+
+      def execute(statement, options \\ []) do
+        Session.execute(@session, statement, options)
+      end
     end
   end
 end
