@@ -27,6 +27,10 @@ defmodule Cassandra.Session do
     GenServer.call(session, {:execute, statement, options})
   end
 
+  def prepare(session, statement) do
+    GenServer.call(session, {:prepare, statement})
+  end
+
   def send(session, request) do
     GenServer.call(session, {:send, request})
   end
@@ -53,6 +57,7 @@ defmodule Cassandra.Session do
       hosts: %{},
       requests: [],
       statements: %{},
+      prepares: %{},
     }
 
     {:ok, state}
@@ -63,14 +68,29 @@ defmodule Cassandra.Session do
   end
 
   def handle_call({:send, request}, from, state) do
-    handle_send(request, from, state)
+    case CQL.encode(request) do
+      :error ->
+        {:reply, {:error, :encode_error}, state}
+
+      encoded ->
+        handle_send(request, encoded, from, state)
+    end
+  end
+
+  def handle_call({:prepare, statement}, from, state) do
+    prepare = %CQL.Prepare{query: statement}
+    encoded = CQL.encode(prepare)
+    hash = :crypto.hash(:md5, encoded)
+
+    next_state = put_in(state.prepares[hash], {from, statement})
+    handle_send(prepare, encoded, nil, next_state)
   end
 
   def handle_call({:execute, statement, options}, from, state)
   when is_bitstring(statement)
   do
     if has_values?(options) do
-      prepare(statement, options, from, state)
+      prepare_and_execute(statement, options, from, state)
     else
       query = %CQL.Query{query: statement, params: struct(CQL.QueryParams, options)}
       handle_send(query, from, state)
@@ -96,29 +116,21 @@ defmodule Cassandra.Session do
         hosts
     end
 
-    next_state = %{state | hosts: hosts}
+    state = %{state | hosts: hosts}
 
-    case change do
+    state = case change do
       :connection_opened ->
-        state.requests
-        |> Enum.reverse
-        |> Enum.each(&start_task(&1, next_state))
-
-        {:noreply, %{next_state | requests: []}}
+        send_requests(state)
 
       {:prepared, hash, _} ->
-        case pop_in(next_state.statements[hash]) do
-          {{from, prepare, options}, state} ->
-            execute(prepare, hash, options, from, next_state, hosts[id])
-            {:noreply, state}
+        state
+        |> reply_prepares(hash)
+        |> execute_statements(hash)
 
-          {nil, state} ->
-            {:noreply, state}
-        end
-
-      _ ->
-        {:noreply, next_state}
+      _ -> state
     end
+
+    {:noreply, state}
   end
 
   def handle_cast({:notify, {change, id}}, %{hosts: hosts, balancer: balancer} = state) do
@@ -173,64 +185,107 @@ defmodule Cassandra.Session do
 
   ### Helpers ###
 
-  defp handle_send(request, from, %{hosts: hosts} = state) do
-    case CQL.encode(request) do
-      :error ->
-        {:reply, {:error, :encode_error}, state}
+  defp handle_send(request, from, state) do
+    handle_send(request, CQL.encode(request), from, state)
+  end
 
-      encoded ->
-        if open_connections_count(hosts) < 1 do
-          {:noreply, %{state | outbox: [{from, request, encoded} | state.outbox]}}
-        else
-          start_task({from, request, encoded}, state)
-          {:noreply, state}
-        end
+  defp handle_send(_, :error, _, state) do
+    {:reply, {:error, :encode_error}, state}
+  end
+
+  defp handle_send(request, encoded, from, %{hosts: hosts, balancer: balancer, retry: retry} = state) do
+    if open_connections_count(hosts) < 1 do
+      {:noreply, %{state | requests: [{from, request, encoded} | state.requests]}}
+    else
+      start_task({from, request, encoded}, hosts, balancer, retry)
+      {:noreply, state}
     end
   end
 
-  defp prepare(statement, options, from, state) do
+  defp prepare_and_execute(statement, options, from, state) when is_bitstring(statement) do
     prepare = %CQL.Prepare{query: statement}
     encoded = CQL.encode(prepare)
     hash = :crypto.hash(:md5, encoded)
-
-    host =
-      state.hosts
-      |> Map.values
-      |> Enum.find(&Host.has_prepared?(&1, hash))
-
-    execute(prepare, hash, options, from, state, host)
+    execute(prepare, encoded, hash, options, from, state)
   end
 
-  defp execute(prepare, hash, options, from, state, host) do
-    if is_nil(host) or Host.open_connections(host) < 1 do
-      next_state = put_in(state.statements[hash], {from, prepare, options})
-      handle_send(prepare, nil, next_state)
+  defp execute(prepare, encoded, hash, options, from, state) do
+    preferred_hosts =
+      state.hosts
+      |> Map.values
+      |> Enum.filter(&Host.has_prepared?(&1, hash))
+
+    execute(prepare, encoded, hash, options, from, state, preferred_hosts)
+  end
+
+  defp execute(prepare, encoded, hash, options, from, state, []) do
+    next_state = put_in(state.statements[hash], {from, prepare, encoded, options})
+    handle_send(prepare, encoded, nil, next_state)
+  end
+
+  defp execute(prepare, encoded, hash, options, from, state, preferred_hosts) do
+    if open_connections_count(preferred_hosts) == 0 do
+      execute(prepare, encoded, hash, options, from, state, [])
     else
+      host = hd(preferred_hosts)
       prepared = host.prepared_statements[hash]
       execute = %CQL.Execute{prepared: prepared, params: struct(CQL.QueryParams, options)}
-      handle_send(execute, from, state)
+      encoded = CQL.encode(execute)
+      start_task({from, execute, encoded}, preferred_hosts, state.balancer, state.retry)
+      {:noreply, state}
     end
   end
 
   defp has_values?(options) do
     count =
       options
-      |> Keyword.get(:values)
+      |> Keyword.get(:values, [])
       |> Enum.count
 
     count > 0
   end
 
+  defp select(request, hosts, balancer) when is_map(hosts) do
+    select(request, Map.values(hosts), balancer)
+  end
+
   defp select(request, hosts, balancer) do
     hosts
-    |> Map.values
     |> LoadBalancing.select(balancer, request)
     |> Enum.map(&key/1)
   end
 
-  defp start_task({from, request, encoded}, %{hosts: hosts, balancer: balancer, retry: retry}) do
+  defp start_task({from, request, encoded}, hosts, balancer, retry) do
     conns = select(request, hosts, balancer)
     Task.start(Worker, :send_request, [request, encoded, from, conns, retry])
+  end
+
+  defp reply_prepares(state, hash) do
+    case pop_in(state.prepares[hash]) do
+      {{from, statement}, state} ->
+        GenServer.reply(from, {:ok, statement})
+        state
+
+      {nil, state} -> state
+    end
+  end
+
+  defp execute_statements(state, hash) do
+    case pop_in(state.statements[hash]) do
+      {{from, prepare, encoded, options}, state} ->
+        execute(prepare, encoded, hash, options, from, state)
+        state
+
+      {nil, state} -> state
+    end
+  end
+
+  defp send_requests(%{hosts: hosts, balancer: balancer, retry: retry} = state) do
+    state.requests
+    |> Enum.reverse
+    |> Enum.each(&start_task(&1, hosts, balancer, retry))
+
+    %{state | requests: []}
   end
 
   defp start_connections(host, n, options) when is_integer(n) and n > 0 do
@@ -257,9 +312,15 @@ defmodule Cassandra.Session do
 
   defp value({_, v}), do: v
 
+  defp open_connections_count(hosts) when is_map(hosts) do
+    hosts
+    |> Map.values
+    |> open_connections_count
+  end
+
   defp open_connections_count(hosts) do
     hosts
-    |> Enum.map(fn {_, host} -> Host.open_connections_count(host) end)
+    |> Enum.map(&Host.open_connections_count(&1))
     |> Enum.reduce(0, &(&1 + &2))
   end
 
