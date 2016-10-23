@@ -6,7 +6,24 @@
 
 An Elixir driver for Apache Cassandra.
 
-This driver works with Cassandra Query Language version 3 (CQL3) and Cassandra's native protocol.
+This driver works with Cassandra Query Language version 3 (CQL3) and Cassandra's native protocol v4.
+
+## Features
+
+* Automatic peer discovery
+* Configurable load-balancing/retry/reconnection policies
+* Ecto like Repo supervisor
+* Asynchronous execution through Tasks
+* Prepared statements with named and position based values
+
+## Todo
+
+* [ ] Batch statement
+* [ ] Token based load-balancing policy
+* [ ] Compression
+* [ ] Authentication and SSL encryption
+* [ ] User Defined Types
+* [ ] Use prepared `result_metadata` optimization
 
 ## Installation
 
@@ -14,33 +31,37 @@ Add `cassandra` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:cassandra, "~> 0.1.0-beta"}]
+  [{:cassandra, "~> 1.0.0-beta"}]
 end
 ```
 
 ## Quick Start
 
 ```elixir
-alias Cassandra.Connection
+defmodule Repo do
+  use Cassandra
+end
 
-{:ok, conn} = Connection.start_link # Connects to 127.0.0.1:9042 by default
+{:ok, _} = Repo.start_link
+# uses "127.0.0.1:9042" as contact point by default
+# discovers other nodes on first connection
 
-{:ok, _} = Connection.query conn, """
+{:ok, _} = Repo.execute """
   CREATE KEYSPACE IF NOT EXISTS test
     WITH replication = {'class':'SimpleStrategy','replication_factor':1};
-  """
+  """, consistency: :all
 
-{:ok, _} = Connection.query conn, """
+{:ok, _} = Repo.execute """
   CREATE TABLE IF NOT EXISTS test.users (
-    id uuid,
+    id timeuuid,
     name varchar,
     age int,
     PRIMARY KEY (id)
   );
-  """
+  """, consistency: :all
 
-{:ok, insert} = Connection.prepare conn, """
-  INSERT INTO test.users (id, name, age) VALUES (uuid(), ?, ?);
+{:ok, insert} = Repo.prepare """
+  INSERT INTO test.users (id, name, age) VALUES (now(), ?, ?);
   """
 
 users = [
@@ -50,17 +71,21 @@ users = [
 ]
 
 users
-|> Enum.map(&Task.async(fn -> Connection.execute(conn, insert, &1) end))
+|> Enum.map(&Task.async(fn -> Repo.execute(insert, values: &1, consistency: :all) end))
 |> Enum.map(&Task.await/1)
+|> Enum.each(&IO.inspect(&1))
 
-{:ok, rows} = Connection.query(conn, "SELECT * FROM text.users;")
+{:ok, rows} = res = Repo.execute("SELECT * FROM test.users;", consistency: :all)
 
 # {:ok,
-# [%{"age" => 2019, "id" => "7ecad341-4b87-466a-a637-5fe7f24ec3a4",
-#    "name" => "Gandolf"},
-#  %{"age" => 50, "id" => "98788196-b3ee-4174-bfe5-79e04e9c9eaf",
-#    "name" => "Bilbo"},
-#  %{"age" => 33, "id" => "87af738f-864c-4e18-998f-fdc511263e78",
-#    "name" => "Frodo"}]}
+#  [%{"age" => 2019,
+#     "id" => "240fb6a0-9903-11e6-8a4f-f58bd8d3766a",
+#     "name" => "Gandolf"},
+#   %{"age" => 33,
+#     "id" => "240fddb0-9903-11e6-8a4f-f58bd8d3766a",
+#     "name" => "Frodo"},
+#   %{"age" => 50,
+#     "id" => "240fb6a1-9903-11e6-8a4f-f58bd8d3766a",
+#     "name" => "Bilbo"}]}
 ```
 
