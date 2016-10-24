@@ -3,7 +3,7 @@ defmodule Cassandra.Mixfile do
 
   def project, do: [
     app: :cassandra,
-    version: "0.1.1-pre",
+    version: "1.0.0-beta",
     elixir: "~> 1.3",
     build_embedded: Mix.env == :prod,
     start_permanent: Mix.env == :prod,
@@ -21,6 +21,7 @@ defmodule Cassandra.Mixfile do
     {:uuid, "~> 1.1"},
     {:excheck, "~> 0.5", only: :test},
     {:triq, github: "triqng/triq", only: :test},
+    {:ecto, "~> 2.1.0-rc.3"},
   ]
 
   defp package, do: [
