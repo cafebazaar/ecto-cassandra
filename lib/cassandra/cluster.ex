@@ -43,6 +43,7 @@ defmodule Cassandra.Cluster do
     do
       peer_hosts =
         peers
+        |> CQL.Result.Rows.to_keyword
         |> Enum.map(&Host.new/1)
         |> Enum.reject(&is_nil/1)
 
@@ -159,9 +160,12 @@ defmodule Cassandra.Cluster do
   end
 
   defp select_local(conn) do
-    case Cassandra.Connection.send(conn, @select_local) do
-      {:ok, [local]} -> {conn, local}
-      _              -> :error
+    with {:ok, rows} <- Cassandra.Connection.send(conn, @select_local),
+         [local] <- CQL.Result.Rows.to_map(rows)
+    do
+      {conn, local}
+    else
+      _ -> :error
     end
   end
 

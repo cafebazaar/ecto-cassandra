@@ -1,31 +1,41 @@
 defmodule CQL.Result.Rows do
   import CQL.DataTypes.Decoder
 
-  defstruct [:metadata, :data]
+  defstruct [
+    :columns,
+    :rows,
+    :rows_count,
+    :paging_state,
+  ]
 
   def decode(buffer) do
     {meta, buffer} = unpack buffer,
       metadata:   &CQL.MetaData.decode/1,
       rows_count: :int
 
-    {data, ""} = ntimes(meta.rows_count, row_content(meta.metadata), buffer)
+    {rows, ""} = ntimes(meta.rows_count, row_content(meta.metadata), buffer)
 
-    keys = Keyword.keys(meta.metadata.column_types)
-    data = Enum.map(data, &to_map(keys, &1))
+    result = %__MODULE__{
+      columns: Keyword.keys(meta.metadata.column_types),
+      rows: rows,
+      rows_count: meta.rows_count,
+    }
 
-    %__MODULE__{metadata: meta.metadata, data: data}
+    {result, Map.get(meta.metadata, :paging_state)}
   end
 
-  def to_map(%__MODULE__{metadata: metadata, data: data}) do
-    keys = Keyword.keys(metadata.column_types)
-    data
-    |> Enum.map(&to_map(keys, &1))
+  def to_keyword(%__MODULE__{columns: columns, rows: rows}) do
+    Enum.map(rows, &zip_to(columns, &1, []))
   end
 
-  defp to_map(keys, values) do
+  def to_map(%__MODULE__{columns: columns, rows: rows}) do
+    Enum.map(rows, &zip_to(columns, &1, %{}))
+  end
+
+  defp zip_to(keys, values, into) do
     keys
     |> Enum.zip(values)
-    |> Enum.into(%{})
+    |> Enum.into(into)
   end
 
   defp row_content(metadata) do

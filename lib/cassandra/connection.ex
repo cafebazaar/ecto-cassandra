@@ -220,7 +220,20 @@ defmodule Cassandra.Connection do
     {:ok, state}
   end
 
-  defp handle_response(%Frame{stream: id, body: %Rows{metadata: %{paging_state: paging}, data: data}}, state) do
+  defp handle_response(%Frame{stream: id, body: {%Rows{} = data, nil}}, state) do
+    {{_, from}, next_state} = pop_in(state.streams[id])
+    case from do
+      {:gen_event, manager} ->
+        Enum.map(data.rows, &GenEvent.ack_notify(manager, &1))
+        GenEvent.stop(manager)
+
+      from ->
+        Connection.reply(from, {:ok, data})
+    end
+    {:ok, next_state}
+  end
+
+  defp handle_response(%Frame{stream: id, body: {%Rows{} = data, paging}}, state) do
     {{request, from}, next_state} = pop_in(state.streams[id])
     manager = case from do
       {:gen_event, manager} ->
@@ -229,27 +242,15 @@ defmodule Cassandra.Connection do
       from ->
         {:ok, manager} = GenEvent.start_link
         stream = GenEvent.stream(manager)
-        Connection.reply(from, {:stream, stream})
+        Connection.reply(from, {:stream, stream, data.columns})
         manager
     end
 
-    Enum.map(data, &GenEvent.ack_notify(manager, &1))
+    Enum.map(data.rows, &GenEvent.ack_notify(manager, &1))
+
     next_request = %{request | params: %{request.params | paging_state: paging}}
 
     send_request(next_request, {:gen_event, manager}, next_state)
-  end
-
-  defp handle_response(%Frame{stream: id, body: %Rows{data: data}}, state) do
-    {{_, from}, next_state} = pop_in(state.streams[id])
-    case from do
-      {:gen_event, manager} ->
-        Enum.map(data, &GenEvent.ack_notify(manager, &1))
-        GenEvent.stop(manager)
-
-      from ->
-        Connection.reply(from, {:ok, data})
-    end
-    {:ok, next_state}
   end
 
   defp handle_response(%Frame{stream: 1, body: body}, state) do
