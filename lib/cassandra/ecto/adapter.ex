@@ -76,6 +76,10 @@ defmodule Cassandra.Ecto.Adapter do
   def loaders(:binary_id, type), do: [&load_uuid/1, type]
   def loaders(_primitive, type), do: [type]
 
+  def in_transaction?(_repo), do: false
+
+  def rollback(_repo, _value), do: nil
+
   ### Helpers ###
 
   defp exec(repo, cql, values, options, on_conflict) do

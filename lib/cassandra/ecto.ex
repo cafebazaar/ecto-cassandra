@@ -26,11 +26,6 @@ defmodule Cassandra.Ecto do
     ])
   end
 
-  defp using(nil, nil),       do: {"", []}
-  defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
-  defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
-  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
-
   def insert(prefix, source, fields, existence, ttl, timestamp) do
     {funcs, fields} = Enum.partition fields, fn
       {_, val} -> match?(%Cassandra.UUID{value: nil}, val)
@@ -129,6 +124,11 @@ defmodule Cassandra.Ecto do
   defp lock(nil), do: []
   defp lock("ALLOW FILTERING"), do: "ALLOW FILTERING"
   defp lock(_), do: raise ArgumentError, "Cassandra do not support locking"
+
+  defp using(nil, nil),       do: {"", []}
+  defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
+  defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
+  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
 
   defp prepend(str, prefix), do: prefix <> str
 
