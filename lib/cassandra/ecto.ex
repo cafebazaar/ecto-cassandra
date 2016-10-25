@@ -200,6 +200,12 @@ defmodule Cassandra.Ecto do
     Enum.map_join(fields, ", ", &identifier/1)
   end
 
+  defp expr({:in, _, [left, right]}, sources, query) do
+    left = in_arg(left, sources, query)
+    right = in_arg(right, sources, query)
+    "#{left} IN #{right}"
+  end
+
   defp in_arg(terms, sources, query) when is_list(terms) do
     "(" <> Enum.map_join(terms, ",", &expr(&1, sources, query)) <> ")"
   end
