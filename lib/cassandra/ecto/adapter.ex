@@ -56,6 +56,17 @@ defmodule Cassandra.Ecto.Adapter do
     exec(repo, cql, values, options, on_conflict)
   end
 
+  def delete(repo, %{source: {prefix, source}}, filters, options) do
+    # TODO: support conditions
+    keyspace  = prefix || repo.__keyspace__
+    exists    = options[:if] == :exists
+    ttl       = options[:ttl]
+    timestamp = options[:timestamp]
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+    {cql, values} = Cassandra.Ecto.delete(keyspace, source, filters, exists, ttl, timestamp)
+    exec(repo, cql, values, options, :error)
+  end
+
   def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
   def autogenerate(:binary_id), do: %Cassandra.UUID{type: :timeuuid}
 

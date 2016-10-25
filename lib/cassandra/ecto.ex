@@ -27,9 +27,9 @@ defmodule Cassandra.Ecto do
   end
 
   defp using(nil, nil),       do: {"", []}
-  defp using(ttl, nil),       do: {" USING TTL ? ", [ttl]}
-  defp using(nil, timestamp), do: {" USING TIMESTAMP ? ", [timestamp]}
-  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ? ", [ttl, timestamp]}
+  defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
+  defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
+  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
 
   def insert(prefix, source, fields, existence, ttl, timestamp) do
     {funcs, fields} = Enum.partition fields, fn
@@ -47,8 +47,8 @@ defmodule Cassandra.Ecto do
       %Cassandra.UUID{type: :uuid,     value: nil} -> "uuid()"
     end
 
-    values = if func_values == "", do: marks, else: "#{marks}, #{func_values}"
-    existence = if existence, do: " IF NOT EXISTS", else: ""
+    values = ifelse(func_values == "", marks, "#{marks}, #{func_values}")
+    existence = ifelse(existence, " IF NOT EXISTS", "")
 
     table = quote_table(prefix, source)
     {using, using_values} = using(ttl, timestamp)
@@ -56,6 +56,21 @@ defmodule Cassandra.Ecto do
     query = "INSERT INTO #{table} (#{names}) VALUES (#{values})#{existence}#{using}"
 
     {query, field_values ++ using_values}
+  end
+
+  def delete(prefix, source, filters, exists, ttl, timestamp) do
+    # TODO: support conditions
+    {fields, values} = Enum.unzip(filters)
+    where = Enum.map_join(fields, " AND ", &"#{identifier(&1)} = ?")
+
+    {using, using_values} = using(ttl, timestamp)
+
+    table = quote_table(prefix, source)
+    existence = ifelse(exists, " IF EXISTS", "")
+
+    query = "DELETE FROM #{table}#{using} WHERE #{where}#{existence}"
+
+    {query, using_values ++ values}
   end
 
   defp marks(n) do
@@ -103,11 +118,7 @@ defmodule Cassandra.Ecto do
   end
 
   defp order_by_expr({dir, expr}, sources, query) do
-    dir = case dir do
-      :asc  -> ""
-      :desc -> " DESC"
-    end
-    expr(expr, sources, query) <> dir
+    expr(expr, sources, query) <> ifelse(dir == :desc, " DESC", "")
   end
 
   defp limit(%{limit: nil}, _sources), do: []
@@ -120,6 +131,9 @@ defmodule Cassandra.Ecto do
   defp lock(_), do: raise ArgumentError, "Cassandra do not support locking"
 
   defp prepend(str, prefix), do: prefix <> str
+
+  defp ifelse(true,  a, _b), do: a
+  defp ifelse(false, _a, b), do: b
 
   defp boolean([%{expr: expr} | exprs], sources, query) do
     Enum.reduce exprs, paren_expr(expr, sources, query), fn
