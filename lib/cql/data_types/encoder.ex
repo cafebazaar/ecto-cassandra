@@ -43,6 +43,8 @@ defmodule CQL.DataTypes.Encoder do
   def long_string(str) when is_bitstring(str), do: (str |> String.length |> int) <> <<str::bytes>>
   def long_string(_), do: :error
 
+  def uuid(:timeuuid), do: string("timeuuid()")
+  def uuid(:uuid), do: string("uuid()")
   def uuid(str) when is_bitstring(str), do: UUID.string_to_binary!(str)
   def uuid(_), do: :error
 

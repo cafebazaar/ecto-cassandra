@@ -30,7 +30,7 @@ defmodule Cassandra.Ecto.Adapter do
     {:nocache, query}
   end
 
-  def execute(repo, %{fields: fields} = meta, {:nocache, query}, params, process, options) do
+  def execute(repo, %{fields: fields}, {:nocache, query}, params, process, options) do
     cql =
       query
       |> put_if_nil(:prefix, repo.__keyspace__)
@@ -46,10 +46,35 @@ defmodule Cassandra.Ecto.Adapter do
     end
   end
 
+  def insert(repo, %{source: {prefix, source}}, fields, on_conflict, [], options) do
+    keyspace = prefix || repo.__keyspace__
+    {not_exists, options} = Keyword.pop(options, :not_exists, false)
+    {cql, values} = Cassandra.Ecto.insert(keyspace, source, fields, not_exists)
+    Logger.debug(cql)
+
+    case repo.execute(cql, Keyword.put(options, :values, values)) do
+      {:ok, :done} ->
+        {:ok, []}
+      {:ok, %{rows_count: 1}} ->
+        {:ok, []}
+      {:ok, %{rows_count: 0}} ->
+        if on_conflict == :nothing do
+          {:ok, []}
+        else
+          {:error, :stale}
+        end
+      error ->
+        throw error
+    end
+  end
+
+  def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
+  def autogenerate(:binary_id), do: %Cassandra.UUID{type: :timeuuid}
+
   def dumpers(:binary_id, type), do: [type]
   def dumpers(_primitive, type), do: [type]
 
-  def loaders(:binary_id, type), do: [type]
+  def loaders(:binary_id, type), do: [&load_uuid/1, type]
   def loaders(_primitive, type), do: [type]
 
   ### Helpers ###
@@ -70,6 +95,9 @@ defmodule Cassandra.Ecto.Adapter do
       other -> other
     end
   end
+
+  defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
+  defp load_uuid(value), do: {:ok, value}
 end
 
 defmodule Repo do

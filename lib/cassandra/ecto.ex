@@ -24,6 +24,35 @@ defmodule Cassandra.Ecto do
     ])
   end
 
+  def insert(prefix, source, fields, not_exists) do
+    {funcs, fields} = Enum.partition fields, fn
+      {_, val} -> match?(%Cassandra.UUID{}, val)
+    end
+
+    {field_names, field_values} = Enum.unzip(fields)
+    {func_names, func_values}   = Enum.unzip(funcs)
+
+    names = Enum.map_join(field_names ++ func_names, ", ", &identifier/1)
+    marks = marks(Enum.count(field_names))
+
+    func_values = Enum.map_join func_values, ", " , fn
+      %Cassandra.UUID{type: :timeuuid} -> "now()"
+      %Cassandra.UUID{type: :uuid}     -> "uuid()"
+    end
+
+    values = if func_values == "", do: marks, else: "#{marks}, #{func_values}"
+    existence = if not_exists, do: " IF NOT EXISTS", else: ""
+
+    query = "INSERT INTO #{quote_table(prefix, source)} (#{names}) VALUES (#{values})#{existence}"
+
+    {query, field_values}
+  end
+
+  defp marks(n) do
+    ["?"]
+    |> Stream.cycle
+    |> Enum.take(n)
+    |> Enum.join(", ")
   end
 
   defp select(%{select: %{fields: fields}} = query, sources) do
