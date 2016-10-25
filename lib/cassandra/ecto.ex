@@ -20,6 +20,7 @@ defmodule Cassandra.Ecto do
       from(query, sources),
       where(query, sources),
       group_by(query, sources),
+      order_by(query, sources),
       limit(query, sources),
       lock(query.lock),
     ])
@@ -83,6 +84,22 @@ defmodule Cassandra.Ecto do
     |> Enum.flat_map(fn %{expr: expr} -> expr end)
     |> Enum.map_join(", ", &expr(&1, sources, query))
     |> prepend("GROUP BY ")
+  end
+
+  defp order_by(%{order_bys: []}, _), do: []
+  defp order_by(%{order_bys: order_bys} = query, sources) do
+    order_bys
+    |> Enum.flat_map(fn %{expr: expr} -> expr end)
+    |> Enum.map_join(", ", &order_by_expr(&1, sources, query))
+    |> prepend("ORDER BY ")
+  end
+
+  defp order_by_expr({dir, expr}, sources, query) do
+    dir = case dir do
+      :asc  -> ""
+      :desc -> " DESC"
+    end
+    expr(expr, sources, query) <> dir
   end
 
   defp limit(%{limit: nil}, _sources), do: []
@@ -181,6 +198,14 @@ defmodule Cassandra.Ecto do
 
   defp expr({:&, _, [_idx, fields, _counter]}, _sources, _query) do
     Enum.map_join(fields, ", ", &identifier/1)
+  end
+
+  defp in_arg(terms, sources, query) when is_list(terms) do
+    "(" <> Enum.map_join(terms, ",", &expr(&1, sources, query)) <> ")"
+  end
+
+  defp in_arg(term, sources, query) do
+    expr(term, sources, query)
   end
 
   defp expr({:fragment, _, [kw]}, _sources, _query) when is_list(kw) or tuple_size(kw) == 3 do
