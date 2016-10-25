@@ -20,6 +20,7 @@ defmodule Cassandra.Ecto do
       from(query, sources),
       where(query, sources),
       group_by(query, sources),
+      lock(query.lock),
     ])
   end
 
@@ -53,6 +54,10 @@ defmodule Cassandra.Ecto do
     |> Enum.map_join(", ", &expr(&1, sources, query))
     |> prepend("GROUP BY ")
   end
+
+  defp lock(nil), do: []
+  defp lock("ALLOW FILTERING"), do: "ALLOW FILTERING"
+  defp lock(_), do: raise ArgumentError, "Cassandra do not support locking"
 
   defp prepend(str, prefix), do: prefix <> str
 
