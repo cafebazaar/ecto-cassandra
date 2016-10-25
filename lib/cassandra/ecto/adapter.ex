@@ -50,6 +50,7 @@ defmodule Cassandra.Ecto.Adapter do
     keyspace = prefix || repo.__keyspace__
     {not_exists, options} = Keyword.pop(options, :not_exists, false)
     {cql, values} = Cassandra.Ecto.insert(keyspace, source, fields, not_exists)
+
     Logger.debug(cql)
 
     case repo.execute(cql, Keyword.put(options, :values, values)) do

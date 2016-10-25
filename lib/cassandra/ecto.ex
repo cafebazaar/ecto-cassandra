@@ -20,6 +20,7 @@ defmodule Cassandra.Ecto do
       from(query, sources),
       where(query, sources),
       group_by(query, sources),
+      limit(query, sources),
       lock(query.lock),
     ])
   end
@@ -82,6 +83,11 @@ defmodule Cassandra.Ecto do
     |> Enum.flat_map(fn %{expr: expr} -> expr end)
     |> Enum.map_join(", ", &expr(&1, sources, query))
     |> prepend("GROUP BY ")
+  end
+
+  defp limit(%{limit: nil}, _sources), do: []
+  defp limit(%{limit: %{expr: expr}} = query, sources) do
+    "LIMIT " <> expr(expr, sources, query)
   end
 
   defp lock(nil), do: []
