@@ -26,7 +26,12 @@ defmodule Cassandra.Ecto do
     ])
   end
 
-  def insert(prefix, source, fields, not_exists) do
+  defp using(nil, nil),       do: {"", []}
+  defp using(ttl, nil),       do: {" USING TTL ? ", [ttl]}
+  defp using(nil, timestamp), do: {" USING TIMESTAMP ? ", [timestamp]}
+  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ? ", [ttl, timestamp]}
+
+  def insert(prefix, source, fields, existence, ttl, timestamp) do
     {funcs, fields} = Enum.partition fields, fn
       {_, val} -> match?(%Cassandra.UUID{value: nil}, val)
     end
@@ -43,11 +48,14 @@ defmodule Cassandra.Ecto do
     end
 
     values = if func_values == "", do: marks, else: "#{marks}, #{func_values}"
-    existence = if not_exists, do: " IF NOT EXISTS", else: ""
+    existence = if existence, do: " IF NOT EXISTS", else: ""
 
-    query = "INSERT INTO #{quote_table(prefix, source)} (#{names}) VALUES (#{values})#{existence}"
+    table = quote_table(prefix, source)
+    {using, using_values} = using(ttl, timestamp)
 
-    {query, field_values}
+    query = "INSERT INTO #{table} (#{names}) VALUES (#{values})#{existence}#{using}"
+
+    {query, field_values ++ using_values}
   end
 
   defp marks(n) do

@@ -47,12 +47,28 @@ defmodule Cassandra.Ecto.Adapter do
   end
 
   def insert(repo, %{source: {prefix, source}}, fields, on_conflict, [], options) do
-    keyspace = prefix || repo.__keyspace__
-    {not_exists, options} = Keyword.pop(options, :not_exists, false)
-    {cql, values} = Cassandra.Ecto.insert(keyspace, source, fields, not_exists)
+    keyspace  = prefix || repo.__keyspace__
+    exists    = options[:if] == :not_exists
+    ttl       = options[:ttl]
+    timestamp = options[:timestamp]
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+    {cql, values} = Cassandra.Ecto.insert(keyspace, source, fields, exists, ttl, timestamp)
+    exec(repo, cql, values, options, on_conflict)
+  end
 
-    Logger.debug(cql)
+  def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
+  def autogenerate(:binary_id), do: %Cassandra.UUID{type: :timeuuid}
 
+  def dumpers(:binary_id, type), do: [type]
+  def dumpers(_primitive, type), do: [type]
+
+  def loaders(:binary_id, type), do: [&load_uuid/1, type]
+  def loaders(_primitive, type), do: [type]
+
+  ### Helpers ###
+
+  defp exec(repo, cql, values, options, on_conflict) do
+    Logger.debug("Executing `#{cql}` with values: #{inspect values}")
     case repo.execute(cql, Keyword.put(options, :values, values)) do
       {:ok, :done} ->
         {:ok, []}
@@ -68,17 +84,6 @@ defmodule Cassandra.Ecto.Adapter do
         throw error
     end
   end
-
-  def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
-  def autogenerate(:binary_id), do: %Cassandra.UUID{type: :timeuuid}
-
-  def dumpers(:binary_id, type), do: [type]
-  def dumpers(_primitive, type), do: [type]
-
-  def loaders(:binary_id, type), do: [&load_uuid/1, type]
-  def loaders(_primitive, type), do: [type]
-
-  ### Helpers ###
 
   defp process_row(row, [{{:., _, _}, _, _} | _] = fields, process) do
     fields
