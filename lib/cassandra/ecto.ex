@@ -1,7 +1,6 @@
 defmodule Cassandra.Ecto do
 
-  alias Ecto.Query
-  alias Ecto.Query.{BooleanExpr, JoinExpr, QueryExpr}
+  alias Ecto.Query.BooleanExpr
 
   @identifier ~r/[a-zA-Z][a-zA-Z0-9_]*/
   @unquoted_name ~r/[a-zA-Z_0-9]{1,48}/
@@ -32,7 +31,7 @@ defmodule Cassandra.Ecto do
     |> prepend("SELECT ")
   end
 
-  defp from(%{from: {name, _schema}, prefix: prefix} = query, sources) do
+  defp from(%{from: {name, _schema}, prefix: prefix}, _sources) do
     prefix
     |> quote_table(name)
     |> prepend("FROM ")
@@ -61,7 +60,7 @@ defmodule Cassandra.Ecto do
     Enum.reduce exprs, paren_expr(expr, sources, query), fn
       %BooleanExpr{expr: e, op: :and}, acc ->
         acc <> " AND " <> paren_expr(e, sources, query)
-      %BooleanExpr{expr: e, op: :and}, acc ->
+      %BooleanExpr{expr: e, op: :or}, acc ->
         acc <> " OR " <> paren_expr(e, sources, query)
     end
   end
@@ -140,11 +139,11 @@ defmodule Cassandra.Ecto do
     identifier(field)
   end
 
-  defp expr({:&, _, [idx, fields, _counter]}, _sources, _query) do
+  defp expr({:&, _, [_idx, fields, _counter]}, _sources, _query) do
     Enum.map_join(fields, ", ", &identifier/1)
   end
 
-  defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
+  defp expr({:fragment, _, [kw]}, _sources, _query) when is_list(kw) or tuple_size(kw) == 3 do
     raise ArgumentError, "Cassandra adapter does not support keyword or interpolated fragments for now!"
   end
 
