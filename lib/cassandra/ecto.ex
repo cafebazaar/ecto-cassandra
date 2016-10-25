@@ -3,6 +3,7 @@ defmodule Cassandra.Ecto do
   alias Ecto.Query
   alias Ecto.Query.{BooleanExpr, JoinExpr, QueryExpr}
 
+  @identifier ~r/[a-zA-Z][a-zA-Z0-9_]*/
   @unquoted_name ~r/[a-zA-Z_0-9]{1,48}/
   @binary_operators_map %{
     :== => "=",
@@ -19,22 +20,42 @@ defmodule Cassandra.Ecto do
       select(query, sources),
       from(query, sources),
       where(query, sources),
+      group_by(query, sources),
     ])
   end
 
-  defp from(%{from: {name, _schema}, prefix: prefix} = query, sources) do
-    from = quote_table(prefix, name)
-    "FROM #{from}"
   end
 
   defp select(%{select: %{fields: fields}} = query, sources) do
-    "SELECT " <> select_fields(fields, sources, query)
+    fields
+    |> select_fields(sources, query)
+    |> prepend("SELECT ")
   end
 
-  defp where(%{wheres: []}, _), do: ""
-  defp where(%{wheres: wheres} = query, sources) do
-    "WHERE " <> boolean(wheres, sources, query)
+  defp from(%{from: {name, _schema}, prefix: prefix} = query, sources) do
+    prefix
+    |> quote_table(name)
+    |> prepend("FROM ")
   end
+
+  defp where(%{wheres: []}, _), do: []
+  defp where(%{wheres: wheres} = query, sources) do
+    wheres
+    |> boolean(sources, query)
+    |> prepend("WHERE ")
+  end
+
+  # TODO: GROUP BY added in cassandra 3.10 and has a bad error or previous versions
+  # Maybe we must warn user about cassandra version
+  defp group_by(%{group_bys: []}, _), do: []
+  defp group_by(%{group_bys: group_bys} = query, sources) do
+    group_bys
+    |> Enum.flat_map(fn %{expr: expr} -> expr end)
+    |> Enum.map_join(", ", &expr(&1, sources, query))
+    |> prepend("GROUP BY ")
+  end
+
+  defp prepend(str, prefix), do: prefix <> str
 
   defp boolean([%{expr: expr} | exprs], sources, query) do
     Enum.reduce exprs, paren_expr(expr, sources, query), fn
@@ -52,9 +73,21 @@ defmodule Cassandra.Ecto do
   defp select_fields(fields, sources, query) do
     Enum.map_join fields, ", ", fn
       {key, value} ->
-        expr(value, sources, query) <> " AS " <> quote_name(key)
+        expr(value, sources, query) <> " AS " <> identifier(key)
       value ->
         expr(value, sources, query)
+    end
+  end
+
+  defp identifier(name) when is_atom(name) do
+    name |> Atom.to_string |> identifier
+  end
+
+  defp identifier(name) do
+    if Regex.match?(@identifier, name) do
+      name
+    else
+      raise ArgumentError, "bad identifier #{inspect name}"
     end
   end
 
@@ -79,7 +112,7 @@ defmodule Cassandra.Ecto do
 
   defp quote_table(name) do
     if Regex.match?(@unquoted_name, name) do
-      <<?", name::binary, ?">>
+      name
     else
       raise ArgumentError, "bad table name #{inspect name}"
     end
@@ -104,11 +137,11 @@ defmodule Cassandra.Ecto do
   defp expr({:^, [], [_]}, _sources, _query), do: "?"
 
   defp expr({{:., _, [{:&, _, [_]}, field]}, _, []}, _sources, _query) when is_atom(field) do
-    quote_name(field)
+    identifier(field)
   end
 
   defp expr({:&, _, [idx, fields, _counter]}, _sources, _query) do
-    Enum.map_join(fields, ", ", &quote_name/1)
+    Enum.map_join(fields, ", ", &identifier/1)
   end
 
   defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
