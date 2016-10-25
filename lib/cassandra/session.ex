@@ -57,7 +57,7 @@ defmodule Cassandra.Session do
       hosts: %{},
       requests: [],
       statements: %{},
-      prepares: %{},
+      refs: %{},
     }
 
     {:ok, state}
@@ -80,10 +80,7 @@ defmodule Cassandra.Session do
   def handle_call({:prepare, statement}, from, state) do
     prepare = %CQL.Prepare{query: statement}
     encoded = CQL.encode(prepare)
-    hash = :crypto.hash(:md5, encoded)
-
-    next_state = put_in(state.prepares[hash], {from, statement})
-    handle_send(prepare, encoded, nil, next_state)
+    send_through_self(prepare, encoded, {from, statement}, state)
   end
 
   def handle_call({:execute, statement, options}, from, state)
@@ -118,16 +115,10 @@ defmodule Cassandra.Session do
 
     state = %{state | hosts: hosts}
 
-    state = case change do
-      :connection_opened ->
-        send_requests(state)
-
-      {:prepared, hash, _} ->
-        state
-        |> reply_prepares(hash)
-        |> execute_statements(hash)
-
-      _ -> state
+    state = if change == :connection_opened do
+      send_requests(state)
+    else
+      state
     end
 
     {:noreply, state}
@@ -183,7 +174,37 @@ defmodule Cassandra.Session do
     {:noreply, %{state | hosts: hosts}}
   end
 
+  def handle_info({ref, result}, state) do
+    case pop_in(state.refs[ref]) do
+      {nil, state} ->
+        {:noreply, state}
+
+      {{from, statement}, state} ->
+        reply = case result do
+          {:ok, _}        -> {:ok, statement}
+          {:error, error} -> error
+        end
+        GenServer.reply(from, reply)
+        {:noreply, state}
+
+      {{from, prepare, encoded, hash, options}, state} ->
+        case result do
+          {:ok, _} ->
+            execute(prepare, encoded, hash, options, from, state)
+          {:error, error} ->
+            GenServer.reply(from, error)
+            {:noreply, state}
+        end
+    end
+  end
+
   ### Helpers ###
+
+  defp send_through_self(request, encoded, data, state) do
+    ref = make_ref
+    next_state = put_in(state.refs[ref], data)
+    handle_send(request, encoded, {self, ref}, next_state)
+  end
 
   defp handle_send(request, from, state) do
     handle_send(request, CQL.encode(request), from, state)
@@ -215,17 +236,8 @@ defmodule Cassandra.Session do
       |> Map.values
       |> Enum.filter(&Host.has_prepared?(&1, hash))
 
-    execute(prepare, encoded, hash, options, from, state, preferred_hosts)
-  end
-
-  defp execute(prepare, encoded, hash, options, from, state, []) do
-    next_state = put_in(state.statements[hash], {from, prepare, encoded, options})
-    handle_send(prepare, encoded, nil, next_state)
-  end
-
-  defp execute(prepare, encoded, hash, options, from, state, preferred_hosts) do
     if open_connections_count(preferred_hosts) == 0 do
-      execute(prepare, encoded, hash, options, from, state, [])
+      send_through_self(prepare, encoded, {from, prepare, encoded, hash, options}, state)
     else
       host = hd(preferred_hosts)
       prepared = host.prepared_statements[hash]
@@ -258,26 +270,6 @@ defmodule Cassandra.Session do
   defp start_task({from, request, encoded}, hosts, balancer, retry) do
     conns = select(request, hosts, balancer)
     Task.start(Worker, :send_request, [request, encoded, from, conns, retry])
-  end
-
-  defp reply_prepares(state, hash) do
-    case pop_in(state.prepares[hash]) do
-      {{from, statement}, state} ->
-        GenServer.reply(from, {:ok, statement})
-        state
-
-      {nil, state} -> state
-    end
-  end
-
-  defp execute_statements(state, hash) do
-    case pop_in(state.statements[hash]) do
-      {{from, prepare, encoded, options}, state} ->
-        execute(prepare, encoded, hash, options, from, state)
-        state
-
-      {nil, state} -> state
-    end
   end
 
   defp send_requests(%{hosts: hosts, balancer: balancer, retry: retry} = state) do
