@@ -55,9 +55,9 @@ defmodule Cassandra.Ecto.Adapter do
     case repo.execute(cql, Keyword.put(options, :values, values)) do
       {:ok, :done} ->
         {:ok, []}
-      {:ok, %{rows_count: 1}} ->
+      {:ok, %{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]}} ->
         {:ok, []}
-      {:ok, %{rows_count: 0}} ->
+      {:ok, %{rows_count: 1, rows: [[false | _]], columns: ["[applied]"|_]}} ->
         if on_conflict == :nothing do
           {:ok, []}
         else

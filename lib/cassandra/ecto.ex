@@ -26,7 +26,7 @@ defmodule Cassandra.Ecto do
 
   def insert(prefix, source, fields, not_exists) do
     {funcs, fields} = Enum.partition fields, fn
-      {_, val} -> match?(%Cassandra.UUID{}, val)
+      {_, val} -> match?(%Cassandra.UUID{value: nil}, val)
     end
 
     {field_names, field_values} = Enum.unzip(fields)
@@ -36,8 +36,8 @@ defmodule Cassandra.Ecto do
     marks = marks(Enum.count(field_names))
 
     func_values = Enum.map_join func_values, ", " , fn
-      %Cassandra.UUID{type: :timeuuid} -> "now()"
-      %Cassandra.UUID{type: :uuid}     -> "uuid()"
+      %Cassandra.UUID{type: :timeuuid, value: nil} -> "now()"
+      %Cassandra.UUID{type: :uuid,     value: nil} -> "uuid()"
     end
 
     values = if func_values == "", do: marks, else: "#{marks}, #{func_values}"
