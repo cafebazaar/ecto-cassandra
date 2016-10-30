@@ -207,10 +207,13 @@ defmodule Cassandra.Ecto do
   defp ifelse(true,  a, _b), do: a
   defp ifelse(false, _a, b), do: b
 
-  defp boolean([%{expr: expr} | exprs], sources, query) do
-    Enum.reduce exprs, expr(expr, sources, query), fn
-      %BooleanExpr{expr: e, op: :and}, acc ->
-        acc <> " AND " <> paren_expr(e, sources, query)
+  defp boolean([%BooleanExpr{expr: expr, op: :and}], sources, query) do
+    expr(expr, sources, query)
+  end
+
+  defp boolean(exprs, sources, query) do
+    Enum.map_join exprs, " AND ", fn
+      %BooleanExpr{expr: expr} -> paren_expr(expr, sources, query)
     end
   end
 

@@ -55,6 +55,14 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE (name = ?) AND (age <= ?)}
   end
 
+  test "and" do
+    query =
+      User
+      |> where([u], u.name == "John" and u.age >= 90)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') AND (age >= 90)}
+  end
+
   test "order by" do
     query = User
       |> order_by([u], u.joined_at)
