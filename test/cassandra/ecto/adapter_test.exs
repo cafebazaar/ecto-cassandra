@@ -10,15 +10,11 @@ defmodule EctoTest do
     @foreign_key_type :binary_id
 
     schema "users" do
+      field :cat_id, Ecto.UUID
       field :name, :string
       field :age,  :integer
+      field :joined_at, Ecto.DateTime
     end
-  end
-
-  defp cql(query, operation \\ :all, counter \\ 0) do
-    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
-    query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
-    Cassandra.Ecto.to_cql(query, operation)
   end
 
   test "from" do
@@ -26,8 +22,12 @@ defmodule EctoTest do
   end
 
   test "from without schema" do
-    assert cql(select("posts", [p], p.title)) == ~s(SELECT title FROM posts)
-    assert cql(select("posts", [:title])) == ~s(SELECT title FROM posts)
+    assert cql(select("some_table", [s], s.x)) == ~s(SELECT x FROM some_table)
+    assert cql(select("some_table", [:y])) == ~s(SELECT y FROM some_table)
   end
-end
 
+  defp cql(query, operation \\ :all, counter \\ 0) do
+    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
+    query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
+    Cassandra.Ecto.to_cql(query, operation)
+  end
