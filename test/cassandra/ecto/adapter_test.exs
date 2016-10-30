@@ -85,6 +85,13 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id, name FROM users}
   end
 
+  test "limit and offset" do
+    query = User
+      |> limit([u], 3)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users LIMIT 3}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
