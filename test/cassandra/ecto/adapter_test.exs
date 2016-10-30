@@ -33,6 +33,12 @@ defmodule EctoTest do
     query = select(User, [u], struct(u, [:name, :age]))
     assert cql(query) == ~s{SELECT name, age FROM users}
   end
+
+  test "aggregates" do
+    query = select(User, [u], count(u.name))
+    assert cql(query) == ~s{SELECT count(name) FROM users}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
