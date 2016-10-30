@@ -125,6 +125,15 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT name FROM users}
   end
 
+  test "lock" do
+    query =
+      User
+      |> lock("ALLOW FILTERING")
+      |> where([u], u.age <= 18)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (age <= 18) ALLOW FILTERING}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
