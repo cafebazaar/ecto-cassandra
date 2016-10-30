@@ -40,7 +40,8 @@ defmodule EctoTest do
   end
 
   test "where" do
-    query = User
+    query =
+      User
       |> where([u], u.name == "John")
       |> where([u], u.age >= 27)
       |> select([u], u.id)
@@ -48,7 +49,8 @@ defmodule EctoTest do
 
     name = "John"
     age = 27
-    query = User
+    query =
+      User
       |> where([u], u.name == ^name)
       |> where([u], u.age <= ^age)
       |> select([u], u.id)
@@ -64,51 +66,60 @@ defmodule EctoTest do
   end
 
   test "order by" do
-    query = User
+    query =
+      User
       |> order_by([u], u.joined_at)
       |> select([u], u.id)
     assert cql(query) == ~s{SELECT id FROM users ORDER BY joined_at}
 
-    query = User
+    query =
+      User
       |> order_by([u], [u.id, u.joined_at])
       |> select([u], [u.id, u.name])
     assert cql(query) == ~s{SELECT id, name FROM users ORDER BY id, joined_at}
 
-    query = User
+    query =
+      User
       |> order_by([u], [asc: u.id, desc: u.joined_at])
       |> select([u], [u.id, u.name])
     assert cql(query) == ~s{SELECT id, name FROM users ORDER BY id, joined_at DESC}
 
-    query = User
+    query =
+      User
       |> order_by([u], [])
       |> select([u], [u.id, u.name])
     assert cql(query) == ~s{SELECT id, name FROM users}
   end
 
   test "limit and offset" do
-    query = User
+    query =
+      User
       |> limit([u], 3)
       |> select([u], u.id)
     assert cql(query) == ~s{SELECT id FROM users LIMIT 3}
   end
 
   test "group by" do
-    query = User
+    query =
+      User
       |> group_by([u], u.cat_id)
       |> select([u], u.name)
     assert cql(query) == ~s{SELECT name FROM users GROUP BY cat_id}
 
-    query = User
+    query =
+      User
       |> group_by([u], 2)
       |> select([u], u.name)
     assert cql(query) == ~s{SELECT name FROM users GROUP BY 2}
 
-    query = User
+    query =
+      User
       |> group_by([u], [u.cat_id, u.age])
       |> select([u], u.name)
     assert cql(query) == ~s{SELECT name FROM users GROUP BY cat_id, age}
 
-    query = User
+    query =
+      User
       |> group_by([u], [])
       |> select([u], u.name)
     assert cql(query) == ~s{SELECT name FROM users}
