@@ -39,6 +39,30 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT count(name) FROM users}
   end
 
+  test "where" do
+    query = User
+      |> where([u], u.name == "John")
+      |> where([u], u.age >= 27)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') AND (age >= 27)}
+
+    name = "John"
+    age = 27
+    query = User
+      |> where([u], u.name == ^name)
+      |> where([u], u.age <= ^age)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = ?) AND (age <= ?)}
+  end
+
+  test "or_where" do
+    query = User
+      |> or_where([u], u.name == "John")
+      |> or_where([u], u.age >= 27)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') OR (age >= 27)}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
