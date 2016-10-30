@@ -43,6 +43,7 @@ defmodule Cassandra.Ecto do
       where ->
         assemble_values([
           {"DELETE FROM #{table}", []},
+          where,
           ifelse(options[:if] == :exists, "IF EXISTS", nil),
           using(options[:ttl], options[:timestamp]),
         ])
