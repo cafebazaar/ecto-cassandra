@@ -14,8 +14,15 @@ defmodule Cassandra.Ecto do
   }
   @binary_operators Map.keys(@binary_operators_map)
 
-  def to_cql(%{sources: sources} = query) do
-    assemble([
+  ### API ###
+
+  def to_cql(query, operation) do
+    {query, _, _} = apply(__MODULE__, operation, [query, []])
+    query
+  end
+
+  def all(%{sources: sources} = query, options \\ []) do
+    query = assemble([
       select(query, sources),
       from(query, sources),
       where(query, sources),
@@ -24,48 +31,82 @@ defmodule Cassandra.Ecto do
       limit(query, sources),
       lock(query.lock),
     ])
+
+    {query, [], options}
   end
 
-  def insert(prefix, source, fields, existence, ttl, timestamp) do
+  def delete_all(%{sources: sources} = query, options) do
+    table = table_name(query)
+    {query, values} = case where(query, sources) do
+      nil ->
+        {"TRUNCATE #{table}", []}
+      where ->
+        assemble_values([
+          {"DELETE FROM #{table}", []},
+          ifelse(options[:if] == :exists, "IF EXISTS", nil),
+          using(options[:ttl], options[:timestamp]),
+        ])
+    end
+
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+
+    {query, values, options}
+  end
+
+  def insert(prefix, source, fields, options) do
+    {query, values} = assemble_values([
+      "INSERT INTO",
+      table_name(prefix, source),
+      values(fields),
+      ifelse(options[:if] == :not_exists, "IF NOT EXISTS", nil),
+      using(options[:ttl], options[:timestamp]),
+    ])
+
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+
+    {query, values, options}
+  end
+
+  def delete(prefix, source, filters, options) do
+    # TODO: support IF conditions
+
+    {query, values} = assemble_values([
+      "DELETE FROM",
+      table_name(prefix, source),
+      using(options[:ttl], options[:timestamp]),
+      where(filters),
+      ifelse(options[:if] == :exists, "IF EXISTS", nil),
+    ])
+
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+
+    {query, values, options}
+  end
+
+  ### Helpers ###
+
+  defp values(fields) do
     {funcs, fields} = Enum.partition fields, fn
       {_, val} -> match?(%Cassandra.UUID{value: nil}, val)
     end
-
     {field_names, field_values} = Enum.unzip(fields)
     {func_names, func_values}   = Enum.unzip(funcs)
-
-    names = Enum.map_join(field_names ++ func_names, ", ", &identifier/1)
-    marks = marks(Enum.count(field_names))
 
     func_values = Enum.map_join func_values, ", " , fn
       %Cassandra.UUID{type: :timeuuid, value: nil} -> "now()"
       %Cassandra.UUID{type: :uuid,     value: nil} -> "uuid()"
     end
 
-    values = ifelse(func_values == "", marks, "#{marks}, #{func_values}")
-    existence = ifelse(existence, " IF NOT EXISTS", "")
+    names = Enum.map_join(field_names ++ func_names, ", ", &identifier/1)
 
-    table = quote_table(prefix, source)
-    {using, using_values} = using(ttl, timestamp)
+    marks = marks(Enum.count(field_names))
+    embeded_values = if func_values == "" do
+      marks
+    else
+      "#{marks}, #{func_values}"
+    end
 
-    query = "INSERT INTO #{table} (#{names}) VALUES (#{values})#{existence}#{using}"
-
-    {query, field_values ++ using_values}
-  end
-
-  def delete(prefix, source, filters, exists, ttl, timestamp) do
-    # TODO: support conditions
-    {fields, values} = Enum.unzip(filters)
-    where = Enum.map_join(fields, " AND ", &"#{identifier(&1)} = ?")
-
-    {using, using_values} = using(ttl, timestamp)
-
-    table = quote_table(prefix, source)
-    existence = ifelse(exists, " IF EXISTS", "")
-
-    query = "DELETE FROM #{table}#{using} WHERE #{where}#{existence}"
-
-    {query, using_values ++ values}
+    {"(#{names}) VALUES (#{embeded_values})", field_values}
   end
 
   defp marks(n) do
@@ -81,13 +122,19 @@ defmodule Cassandra.Ecto do
     |> prepend("SELECT ")
   end
 
-  defp from(%{from: {name, _schema}, prefix: prefix}, _sources) do
-    prefix
-    |> quote_table(name)
+  defp from(query, _sources) do
+    query
+    |> table_name
     |> prepend("FROM ")
   end
 
-  defp where(%{wheres: []}, _), do: []
+  defp where(filters) when is_list(filters) do
+    {fields, values} = Enum.unzip(filters)
+    conditions = Enum.map_join(fields, " AND ", &"#{identifier(&1)} = ?")
+    {"WHERE #{conditions}", values}
+  end
+
+  defp where(%{wheres: []}, _), do: nil
   defp where(%{wheres: wheres} = query, sources) do
     wheres
     |> boolean(sources, query)
@@ -96,7 +143,7 @@ defmodule Cassandra.Ecto do
 
   # TODO: GROUP BY added in cassandra 3.10 and has a bad error or previous versions
   # Maybe we must warn user about cassandra version
-  defp group_by(%{group_bys: []}, _), do: []
+  defp group_by(%{group_bys: []}, _), do: nil
   defp group_by(%{group_bys: group_bys} = query, sources) do
     group_bys
     |> Enum.flat_map(fn %{expr: expr} -> expr end)
@@ -104,7 +151,7 @@ defmodule Cassandra.Ecto do
     |> prepend("GROUP BY ")
   end
 
-  defp order_by(%{order_bys: []}, _), do: []
+  defp order_by(%{order_bys: []}, _), do: nil
   defp order_by(%{order_bys: order_bys} = query, sources) do
     order_bys
     |> Enum.flat_map(fn %{expr: expr} -> expr end)
@@ -116,16 +163,16 @@ defmodule Cassandra.Ecto do
     expr(expr, sources, query) <> ifelse(dir == :desc, " DESC", "")
   end
 
-  defp limit(%{limit: nil}, _sources), do: []
+  defp limit(%{limit: nil}, _sources), do: nil
   defp limit(%{limit: %{expr: expr}} = query, sources) do
     "LIMIT " <> expr(expr, sources, query)
   end
 
-  defp lock(nil), do: []
+  defp lock(nil), do: nil
   defp lock("ALLOW FILTERING"), do: "ALLOW FILTERING"
   defp lock(_), do: raise ArgumentError, "Cassandra do not support locking"
 
-  defp using(nil, nil),       do: {"", []}
+  defp using(nil, nil),       do: nil
   defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
   defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
   defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
@@ -181,14 +228,18 @@ defmodule Cassandra.Ecto do
     end
   end
 
-  defp quote_table(nil, name),    do: quote_table(name)
-  defp quote_table(prefix, name), do: quote_table(prefix) <> "." <> quote_table(name)
-
-  defp quote_table(name) when is_atom(name) do
-    name |> Atom.to_string |> quote_table
+  defp table_name(%{from: {table, _schema}, prefix: prefix}) do
+    table_name(prefix, table)
   end
 
-  defp quote_table(name) do
+  defp table_name(nil, name),    do: table_name(name)
+  defp table_name(prefix, name), do: table_name(prefix) <> "." <> table_name(name)
+
+  defp table_name(name) when is_atom(name) do
+    name |> Atom.to_string |> table_name
+  end
+
+  defp table_name(name) do
     if Regex.match?(@unquoted_name, name) do
       name
     else
@@ -198,8 +249,24 @@ defmodule Cassandra.Ecto do
 
   defp assemble(list) do
     list
-    |> List.flatten
+    |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")
+  end
+
+  defp assemble_values(list) do
+    {parts, values} =
+      list
+      |> Enum.map(fn
+          nil            -> nil
+          {part, values} -> {part, values}
+          part           -> {part, []}
+         end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.unzip
+
+    IO.inspect({parts, values})
+
+    {Enum.join(parts, " "), List.flatten(values)}
   end
 
   Enum.map @binary_operators_map, fn {op, term} ->

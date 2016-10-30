@@ -1,9 +1,9 @@
 defmodule Cassandra.Ecto.Adapter do
-  @behaviour Ecto.Adapter
-
   require Logger
 
   ### Ecto.Adapter Callbacks ###
+
+  @behaviour Ecto.Adapter
 
   defmacro __before_compile__(env) do
     config = Module.get_attribute(env.module, :config)
@@ -26,44 +26,33 @@ defmodule Cassandra.Ecto.Adapter do
     supervisor(repo.__supervisor__, [options])
   end
 
-  def prepare(_atom, query) do
-    {:nocache, query}
+  def prepare(type, query) do
+    {:nocache, {type, query}}
   end
 
-  def execute(repo, %{fields: fields}, {:nocache, query}, params, process, options) do
-    cql =
-      query
-      |> put_if_nil(:prefix, repo.__keyspace__)
-      |> Cassandra.Ecto.to_cql
-
+  def execute(repo, %{fields: fields}, {:nocache, {type, query}}, params, process, options) do
+    {cql, values, options} = apply(Cassandra.Ecto, type, [query, options])
+    options = Keyword.put(options, :values, values ++ params)
     Logger.debug(cql)
 
-    case repo.execute(cql, Keyword.put(options, :values, params)) do
+    case repo.execute(cql, options) do
       {:ok, %{rows_count: count, rows: rows}} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
+      {:ok, :done} ->
+        :ok
       error ->
         throw error
     end
   end
 
   def insert(repo, %{source: {prefix, source}}, fields, on_conflict, [], options) do
-    keyspace  = prefix || repo.__keyspace__
-    exists    = options[:if] == :not_exists
-    ttl       = options[:ttl]
-    timestamp = options[:timestamp]
-    options = Keyword.drop(options, [:if, :ttl, :timestamp])
-    {cql, values} = Cassandra.Ecto.insert(keyspace, source, fields, exists, ttl, timestamp)
+    {cql, values, options} = Cassandra.Ecto.insert(prefix, source, fields, options)
     exec(repo, cql, values, options, on_conflict)
   end
 
   def delete(repo, %{source: {prefix, source}}, filters, options) do
     # TODO: support conditions
-    keyspace  = prefix || repo.__keyspace__
-    exists    = options[:if] == :exists
-    ttl       = options[:ttl]
-    timestamp = options[:timestamp]
-    options = Keyword.drop(options, [:if, :ttl, :timestamp])
-    {cql, values} = Cassandra.Ecto.delete(keyspace, source, filters, exists, ttl, timestamp)
+    {cql, values, options} = Cassandra.Ecto.delete(prefix, source, filters, options)
     exec(repo, cql, values, options, :error)
   end
 
@@ -82,7 +71,7 @@ defmodule Cassandra.Ecto.Adapter do
 
   ### Helpers ###
 
-  defp exec(repo, cql, values, options, on_conflict) do
+  defp exec(repo, cql, values, options, on_conflict \\ :nothing) do
     Logger.debug("Executing `#{cql}` with values: #{inspect values}")
     case repo.execute(cql, Keyword.put(options, :values, values)) do
       {:ok, :done} ->
