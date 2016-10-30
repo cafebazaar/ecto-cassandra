@@ -26,6 +26,13 @@ defmodule EctoTest do
     assert cql(select("some_table", [:y])) == ~s(SELECT y FROM some_table)
   end
 
+  test "select" do
+    query = select(User, [u], {u.name, u.age})
+    assert cql(query) == ~s{SELECT name, age FROM users}
+
+    query = select(User, [u], struct(u, [:name, :age]))
+    assert cql(query) == ~s{SELECT name, age FROM users}
+  end
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
