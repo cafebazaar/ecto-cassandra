@@ -5,7 +5,7 @@ defmodule Cassandra.Connection do
 
   alias :gen_tcp, as: TCP
   alias CQL.{Frame, Startup, Ready, Event, Error}
-  alias CQL.Result.{Rows, Void, Prepared}
+  alias CQL.Result.{Rows, Void, Prepared, SetKeyspace}
   alias Cassandra.{Session, Reconnection, Host}
 
   @default_options [
@@ -18,6 +18,7 @@ defmodule Cassandra.Connection do
     session: nil,
     event_manager: nil,
     async_init: true,
+    keyspace: nil,
   ]
 
   @call_timeout 5000
@@ -60,6 +61,7 @@ defmodule Cassandra.Connection do
   def init(options) do
     options = Keyword.merge(@default_options, options)
 
+
     {:ok, reconnection} =
       options
       |> Keyword.take([:reconnection_policy, :reconnection_args])
@@ -78,7 +80,7 @@ defmodule Cassandra.Connection do
 
     state =
       options
-      |> Keyword.take([:port, :connect_timeout, :timeout, :session, :event_manager])
+      |> Keyword.take([:port, :connect_timeout, :timeout, :session, :event_manager, :keyspace])
       |> Enum.into(%{
         host: host,
         host_id: host_id,
@@ -92,7 +94,7 @@ defmodule Cassandra.Connection do
     if options[:async_init] == true do
       {:connect, :init, state}
     else
-      with {:ok, socket} <- startup(state.host, state.port, state.connect_timeout, state.timeout) do
+      with {:ok, socket} <- startup(state) do
         after_connect(socket, state)
       else
         _ -> {:stop, :connection_failed}
@@ -100,8 +102,8 @@ defmodule Cassandra.Connection do
     end
   end
 
-  def connect(_info, state = %{host: host, port: port, connect_timeout: connect_timeout, timeout: timeout}) do
-    with {:ok, socket} <- startup(host, port, connect_timeout, timeout) do
+  def connect(_info, state) do
+    with {:ok, socket} <- startup(state) do
       after_connect(socket, state)
     else
       :stop ->
@@ -326,9 +328,10 @@ defmodule Cassandra.Connection do
     |> Enum.each(fn {_, from} -> Connection.reply(from, message) end)
   end
 
-  defp startup(host, port, connect_timeout, timeout) do
+  defp startup(%{host: host, port: port, connect_timeout: connect_timeout, timeout: timeout, keyspace: keyspace}) do
     with {:ok, socket} <- TCP.connect(host, port, [:binary, active: false], connect_timeout),
-         :ok <- handshake(socket, timeout)
+         :ok <- handshake(socket, timeout),
+         :ok <- set_keyspace(socket, keyspace, timeout)
     do
       {:ok, socket}
     end
@@ -361,14 +364,31 @@ defmodule Cassandra.Connection do
     end
   end
 
+  defp set_keyspace(_socket, nil, _timeout), do: :ok
+  defp set_keyspace(socket, keyspace, timeout) do
+    with :ok <- send_to(socket, CQL.encode(%CQL.Query{query: "USE #{keyspace}"})),
+         {:ok, buffer} <- TCP.recv(socket, 0, timeout),
+         {%Frame{body: %SetKeyspace{name: ^keyspace}}, ""} <- CQL.decode(buffer)
+    do
+      :ok
+    else
+      {%Frame{body: %Error{code: code, message: message}}, _} ->
+        Logger.error("#{__MODULE__} [#{inspect code}] #{message}")
+        :stop
+      error ->
+        Logger.error("#{__MODULE__} unexpected #{inspect error}")
+        :stop
+    end
+  end
+
   defp handshake(socket, timeout) do
     with :ok <- send_to(socket, CQL.encode(%Startup{})),
          {:ok, buffer} <- TCP.recv(socket, 0, timeout),
          {%Frame{body: %Ready{}}, ""} <- CQL.decode(buffer)
-      do
-        :ok
+    do
+      :ok
     else
-      %Frame{body: %Error{code: code, message: message}} ->
+      {%Frame{body: %Error{code: code, message: message}}, _} ->
         Logger.error("#{__MODULE__} error[#{code}] #{message}")
         :stop
       {:error, :closed} ->
