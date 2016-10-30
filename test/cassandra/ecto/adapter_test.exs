@@ -134,6 +134,19 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE (age <= 18) ALLOW FILTERING}
   end
 
+  test "string escape" do
+    query =
+      User
+      |> where(name: "'\\  ")
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = '''\\  ')}
+
+    query =
+      User
+      |> where(name: "'")
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users WHERE (name = '''')}
+  end
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
