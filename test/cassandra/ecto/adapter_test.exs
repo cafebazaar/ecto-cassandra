@@ -97,3 +97,4 @@ defmodule EctoTest do
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
     Cassandra.Ecto.to_cql(query, operation)
   end
+end
