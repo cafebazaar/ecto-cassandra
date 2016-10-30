@@ -26,6 +26,10 @@ defmodule Cassandra.Ecto.Adapter do
     supervisor(repo.__supervisor__, [options])
   end
 
+  def ensure_all_started(_repo, _type) do
+    {:ok, []}
+  end
+
   def prepare(type, query) do
     {:nocache, {type, query}}
   end
@@ -50,6 +54,11 @@ defmodule Cassandra.Ecto.Adapter do
     exec(repo, cql, values, options, on_conflict)
   end
 
+  def insert_all(_repo, %{source: {_prefix, _source}}, _header, _list, _on_conflict, [], _options) do
+    # TODO: use batch to pack inserts
+    raise "Not implemented"
+  end
+
   def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
     {cql, values, options} = Cassandra.Ecto.update(prefix, source, fields, filters, options)
     exec(repo, cql, values, options)
@@ -68,6 +77,10 @@ defmodule Cassandra.Ecto.Adapter do
 
   def loaders(:binary_id, type), do: [&load_uuid/1, type]
   def loaders(_primitive, type), do: [type]
+
+  def transaction(_repo, _options, _func) do
+    {:error, :not_supported}
+  end
 
   def in_transaction?(_repo), do: false
 
