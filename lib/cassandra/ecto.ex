@@ -240,24 +240,9 @@ defmodule Cassandra.Ecto do
     end
   end
 
-  defp quote_name(name) when is_atom(name) do
-    name |> Atom.to_string |> quote_name
-  end
-
-  defp quote_name(name) do
-    if Regex.match?(@unquoted_name, name) do
-      <<?", name::binary, ?">>
-    else
-      raise ArgumentError, "bad field name #{inspect name}"
-    end
-  end
-
   defp table_name(%{from: {table, _schema}, prefix: prefix}) do
     table_name(prefix, table)
   end
-
-  defp table_name(nil, name),    do: table_name(name)
-  defp table_name(prefix, name), do: table_name(prefix) <> "." <> table_name(name)
 
   defp table_name(name) when is_atom(name) do
     name |> Atom.to_string |> table_name
@@ -270,6 +255,9 @@ defmodule Cassandra.Ecto do
       raise ArgumentError, "bad table name #{inspect name}"
     end
   end
+
+  defp table_name(nil, name),    do: table_name(name)
+  defp table_name(prefix, name), do: table_name(prefix) <> "." <> table_name(name)
 
   defp assemble(list) do
     list
@@ -287,8 +275,6 @@ defmodule Cassandra.Ecto do
          end)
       |> Enum.reject(&is_nil/1)
       |> Enum.unzip
-
-    IO.inspect({parts, values})
 
     {Enum.join(parts, " "), List.flatten(values)}
   end
@@ -317,14 +303,6 @@ defmodule Cassandra.Ecto do
     left = in_arg(left, sources, query)
     right = in_arg(right, sources, query)
     "#{left} IN #{right}"
-  end
-
-  defp in_arg(terms, sources, query) when is_list(terms) do
-    "(" <> Enum.map_join(terms, ",", &expr(&1, sources, query)) <> ")"
-  end
-
-  defp in_arg(term, sources, query) do
-    expr(term, sources, query)
   end
 
   defp expr({:fragment, _, [kw]}, _sources, _query) when is_list(kw) or tuple_size(kw) == 3 do
@@ -365,6 +343,14 @@ defmodule Cassandra.Ecto do
 
   defp expr(value, _sources, _query) when is_integer(value) or is_float(value) do
     "#{value}"
+  end
+
+  defp in_arg(terms, sources, query) when is_list(terms) do
+    "(" <> Enum.map_join(terms, ",", &expr(&1, sources, query)) <> ")"
+  end
+
+  defp in_arg(term, sources, query) do
+    expr(term, sources, query)
   end
 
   defp escape_string(value) when is_bitstring(value) do

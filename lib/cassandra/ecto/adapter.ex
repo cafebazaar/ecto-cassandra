@@ -52,12 +52,12 @@ defmodule Cassandra.Ecto.Adapter do
 
   def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
     {cql, values, options} = Cassandra.Ecto.update(prefix, source, fields, filters, options)
-    exec(repo, cql, values, options, :error)
+    exec(repo, cql, values, options)
   end
 
   def delete(repo, %{source: {prefix, source}}, filters, options) do
     {cql, values, options} = Cassandra.Ecto.delete(prefix, source, filters, options)
-    exec(repo, cql, values, options, :error)
+    exec(repo, cql, values, options)
   end
 
   def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
@@ -75,7 +75,7 @@ defmodule Cassandra.Ecto.Adapter do
 
   ### Helpers ###
 
-  defp exec(repo, cql, values, options, on_conflict \\ :nothing) do
+  defp exec(repo, cql, values, options, on_conflict \\ :error) do
     Logger.debug("Executing `#{cql}` with values: #{inspect values}")
     case repo.execute(cql, Keyword.put(options, :values, values)) do
       {:ok, :done} ->
@@ -101,13 +101,6 @@ defmodule Cassandra.Ecto.Adapter do
 
   defp process_row(row, fields, process) do
     Enum.map(fields, &process.(&1, row, nil))
-  end
-
-  defp put_if_nil(map, key, value) do
-    Map.update map, key, value, fn
-      nil   -> value
-      other -> other
-    end
   end
 
   defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
