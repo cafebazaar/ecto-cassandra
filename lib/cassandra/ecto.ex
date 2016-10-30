@@ -5,12 +5,13 @@ defmodule Cassandra.Ecto do
   @identifier ~r/[a-zA-Z][a-zA-Z0-9_]*/
   @unquoted_name ~r/[a-zA-Z_0-9]{1,48}/
   @binary_operators_map %{
-    :== => "=",
-    :<  => "<",
-    :>  => ">",
-    :<= => "<=",
-    :>= => ">=",
-    :!= => "!=",
+    :==  => "=",
+    :<   => "<",
+    :>   => ">",
+    :<=  => "<=",
+    :>=  => ">=",
+    :!=  => "!=",
+    :and => "AND",
   }
   @binary_operators Map.keys(@binary_operators_map)
 
@@ -207,11 +208,9 @@ defmodule Cassandra.Ecto do
   defp ifelse(false, _a, b), do: b
 
   defp boolean([%{expr: expr} | exprs], sources, query) do
-    Enum.reduce exprs, paren_expr(expr, sources, query), fn
+    Enum.reduce exprs, expr(expr, sources, query), fn
       %BooleanExpr{expr: e, op: :and}, acc ->
         acc <> " AND " <> paren_expr(e, sources, query)
-      %BooleanExpr{expr: e, op: :or}, acc ->
-        acc <> " OR " <> paren_expr(e, sources, query)
     end
   end
 
@@ -355,6 +354,10 @@ defmodule Cassandra.Ecto do
 
   defp escape_string(value) when is_bitstring(value) do
     String.replace(value, "'", "''")
+  end
+
+  defp binary_op_arg_expr({:and, _, [_, _]} = expr, sources, query) do
+    expr(expr, sources, query)
   end
 
   defp binary_op_arg_expr({op, _, [_, _]} = expr, sources, query)
