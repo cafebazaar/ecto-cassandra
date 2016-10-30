@@ -63,6 +63,28 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') OR (age >= 27)}
   end
 
+  test "order by" do
+    query = User
+      |> order_by([u], u.joined_at)
+      |> select([u], u.id)
+    assert cql(query) == ~s{SELECT id FROM users ORDER BY joined_at}
+
+    query = User
+      |> order_by([u], [u.id, u.joined_at])
+      |> select([u], [u.id, u.name])
+    assert cql(query) == ~s{SELECT id, name FROM users ORDER BY id, joined_at}
+
+    query = User
+      |> order_by([u], [asc: u.id, desc: u.joined_at])
+      |> select([u], [u.id, u.name])
+    assert cql(query) == ~s{SELECT id, name FROM users ORDER BY id, joined_at DESC}
+
+    query = User
+      |> order_by([u], [])
+      |> select([u], [u.id, u.name])
+    assert cql(query) == ~s{SELECT id, name FROM users}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
