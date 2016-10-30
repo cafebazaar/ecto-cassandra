@@ -92,6 +92,28 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users LIMIT 3}
   end
 
+  test "group by" do
+    query = User
+      |> group_by([u], u.cat_id)
+      |> select([u], u.name)
+    assert cql(query) == ~s{SELECT name FROM users GROUP BY cat_id}
+
+    query = User
+      |> group_by([u], 2)
+      |> select([u], u.name)
+    assert cql(query) == ~s{SELECT name FROM users GROUP BY 2}
+
+    query = User
+      |> group_by([u], [u.cat_id, u.age])
+      |> select([u], u.name)
+    assert cql(query) == ~s{SELECT name FROM users GROUP BY cat_id, age}
+
+    query = User
+      |> group_by([u], [])
+      |> select([u], u.name)
+    assert cql(query) == ~s{SELECT name FROM users}
+  end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
