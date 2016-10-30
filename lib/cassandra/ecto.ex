@@ -67,6 +67,23 @@ defmodule Cassandra.Ecto do
     {query, values, options}
   end
 
+  def update(prefix, source, fields, filters, options) do
+    # TODO: support IF conditions
+
+    {query, values} = assemble_values([
+      "UPDATE",
+      table_name(prefix, source),
+      using(options[:ttl], options[:timestamp]),
+      set(fields),
+      where(filters),
+      ifelse(options[:if] == :exists, "IF EXISTS", nil),
+    ])
+
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+
+    {query, values, options}
+  end
+
   def delete(prefix, source, filters, options) do
     # TODO: support IF conditions
 
@@ -114,6 +131,12 @@ defmodule Cassandra.Ecto do
     |> Stream.cycle
     |> Enum.take(n)
     |> Enum.join(", ")
+  end
+
+  defp set(fields) do
+    {names, values} = Enum.unzip(fields)
+    sets = Enum.map_join(names, ", ", &"#{identifier(&1)} = ?")
+    {"SET #{sets}", values}
   end
 
   defp select(%{select: %{fields: fields}} = query, sources) do

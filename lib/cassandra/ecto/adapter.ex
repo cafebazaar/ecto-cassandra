@@ -50,8 +50,12 @@ defmodule Cassandra.Ecto.Adapter do
     exec(repo, cql, values, options, on_conflict)
   end
 
+  def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
+    {cql, values, options} = Cassandra.Ecto.update(prefix, source, fields, filters, options)
+    exec(repo, cql, values, options, :error)
+  end
+
   def delete(repo, %{source: {prefix, source}}, filters, options) do
-    # TODO: support conditions
     {cql, values, options} = Cassandra.Ecto.delete(prefix, source, filters, options)
     exec(repo, cql, values, options, :error)
   end
