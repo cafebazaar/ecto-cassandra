@@ -7,6 +7,14 @@ defmodule Cassandra.Mixfile do
     elixir: "~> 1.3",
     build_embedded: Mix.env == :prod,
     start_permanent: Mix.env == :prod,
+    test_coverage: [tool: ExCoveralls],
+    preferred_cli_env: [
+      "coveralls": :test,
+      "coveralls.detail": :test,
+      "coveralls.post": :test,
+      "coveralls.html": :test,
+    ],
+    source_url: "https://github.com/cafebazaar.ir/elixir-cassandra",
     description: "A pure Elixir driver for Apache Cassandra",
     package: package,
     deps: deps,
@@ -19,9 +27,10 @@ defmodule Cassandra.Mixfile do
   defp deps, do: [
     {:connection, "~> 1.0"},
     {:uuid, "~> 1.1"},
+    {:ecto, "~> 2.1.0-rc.3"},
     {:excheck, "~> 0.5", only: :test},
     {:triq, github: "triqng/triq", only: :test},
-    {:ecto, "~> 2.1.0-rc.3"},
+    {:excoveralls, "~> 0.5", only: :test},
   ]
 
   defp package, do: [
