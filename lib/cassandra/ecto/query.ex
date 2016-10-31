@@ -39,7 +39,7 @@ defmodule Cassandra.Ecto.Query do
   defmacro cast(field, type) when type in @types do
     fragment = "cast(? as #{Atom.to_string(type)})"
     quote do
-      fragment(fragment, unquote(field))
+      fragment(unquote(fragment), unquote(field))
     end
   end
 
