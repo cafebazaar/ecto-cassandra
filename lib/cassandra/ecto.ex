@@ -207,13 +207,10 @@ defmodule Cassandra.Ecto do
   defp ifelse(true,  a, _b), do: a
   defp ifelse(false, _a, b), do: b
 
-  defp boolean([%BooleanExpr{expr: expr, op: :and}], sources, query) do
-    expr(expr, sources, query)
-  end
-
   defp boolean(exprs, sources, query) do
     Enum.map_join exprs, " AND ", fn
-      %BooleanExpr{expr: expr} -> paren_expr(expr, sources, query)
+      %BooleanExpr{expr: expr, op: :and} -> expr(expr, sources, query)
+      %BooleanExpr{op: :or} -> raise ArgumentError, "Cassandra do not support OR in query"
     end
   end
 
@@ -359,13 +356,9 @@ defmodule Cassandra.Ecto do
     String.replace(value, "'", "''")
   end
 
-  defp binary_op_arg_expr({:and, _, [_, _]} = expr, sources, query) do
-    expr(expr, sources, query)
-  end
-
   defp binary_op_arg_expr({op, _, [_, _]} = expr, sources, query)
   when op in @binary_operators do
-    paren_expr(expr, sources, query)
+    expr(expr, sources, query)
   end
 
   defp binary_op_arg_expr(expr, sources, query) do

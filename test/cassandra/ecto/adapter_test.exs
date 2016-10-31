@@ -45,7 +45,7 @@ defmodule EctoTest do
       |> where([u], u.name == "John")
       |> where([u], u.age >= 27)
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') AND (age >= 27)}
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = 'John' AND age >= 27}
 
     name = "John"
     age = 27
@@ -54,7 +54,7 @@ defmodule EctoTest do
       |> where([u], u.name == ^name)
       |> where([u], u.age <= ^age)
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (name = ?) AND (age <= ?)}
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = ? AND age <= ?}
   end
 
   test "and" do
@@ -62,7 +62,7 @@ defmodule EctoTest do
       User
       |> where([u], u.name == "John" and u.age >= 90)
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (name = 'John') AND (age >= 90)}
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = 'John' AND age >= 90}
   end
 
   test "order by" do
@@ -131,7 +131,7 @@ defmodule EctoTest do
       |> lock("ALLOW FILTERING")
       |> where([u], u.age <= 18)
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (age <= 18) ALLOW FILTERING}
+    assert cql(query) == ~s{SELECT id FROM users WHERE age <= 18 ALLOW FILTERING}
   end
 
   test "string escape" do
@@ -139,14 +139,15 @@ defmodule EctoTest do
       User
       |> where(name: "'\\  ")
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (name = '''\\  ')}
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = '''\\  '}
 
     query =
       User
       |> where(name: "'")
       |> select([u], u.id)
-    assert cql(query) == ~s{SELECT id FROM users WHERE (name = '''')}
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = ''''}
   end
+
   defp cql(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
