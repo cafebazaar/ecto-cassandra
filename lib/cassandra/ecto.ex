@@ -315,6 +315,10 @@ defmodule Cassandra.Ecto do
     end
   end
 
+  defp expr({:or, _, _}, _sources, query) do
+    error!(query, "Cassandra do not support OR operator")
+  end
+
   defp expr({fun, _, args}, sources, query)
   when is_atom(fun) and is_list(args)
   do
