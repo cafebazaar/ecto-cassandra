@@ -161,6 +161,44 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE name = ''''}
   end
 
+  test "binary ops" do
+    query =
+      User
+      |> where([u], u.age == 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age = 20}
+
+    query =
+      User
+      |> where([u], u.age != 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age != 20}
+
+    query =
+      User
+      |> where([u], u.age >= 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age >= 20}
+
+    query =
+      User
+      |> where([u], u.age <= 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age <= 20}
+
+    query =
+      User
+      |> where([u], u.age < 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age < 20}
+
+    query =
+      User
+      |> where([u], u.age > 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age > 20}
+   end
+
   describe "functions" do
     test "token" do
       query =
