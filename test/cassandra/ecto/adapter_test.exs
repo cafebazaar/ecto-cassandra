@@ -151,13 +151,13 @@ defmodule EctoTest do
     query =
       User
       |> where(name: "'\\  ")
-      |> select([u], u.id)
+      |> select([:id])
     assert cql(query) == ~s{SELECT id FROM users WHERE name = '''\\  '}
 
     query =
       User
       |> where(name: "'")
-      |> select([u], u.id)
+      |> select([:id])
     assert cql(query) == ~s{SELECT id FROM users WHERE name = ''''}
   end
 
