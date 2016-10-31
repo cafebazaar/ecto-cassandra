@@ -261,6 +261,14 @@ defmodule EctoTest do
   #   assert SQL.all(query) == ~s{SELECT $1::integer[] FROM "schema" AS s0}
   # end
 
+  test "nested expressions" do
+    z = 123
+    query =
+      from(u in User, [])
+      |> select([u], u.age > 0 and (u.age > ^(-z)) and true)
+    assert cql(query) == ~s{SELECT age > 0 AND age > ? AND TRUE FROM users}
+  end
+
   describe "functions" do
     test "token" do
       query =
