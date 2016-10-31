@@ -358,9 +358,9 @@ defmodule EctoTest do
     end
   end
 
-  defp cql(query, operation \\ :all, counter \\ 0) do
+  defp cql(query, operation \\ :all, options \\ [], counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
-    Cassandra.Ecto.to_cql(query, operation)
+    Cassandra.Ecto.to_cql(query, operation, options)
   end
 end
