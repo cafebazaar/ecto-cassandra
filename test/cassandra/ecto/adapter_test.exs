@@ -202,9 +202,9 @@ defmodule EctoTest do
   test "fragments" do
     query =
       User
-      |> where([u], u.join_at < fragment("now()"))
+      |> where([u], u.joined_at < fragment("now()"))
       |> select([:id])
-    assert cql(query) == ~s{SELECT id FROM users WHERE join_at < now()}
+    assert cql(query) == ~s{SELECT id FROM users WHERE joined_at < now()}
 
     query = select(User, [u], fragment(age: 20))
     assert_raise Ecto.QueryError, fn ->
