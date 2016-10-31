@@ -269,6 +269,14 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT age > 0 AND age > ? AND TRUE FROM users}
   end
 
+  test "in expression" do
+    query =
+      User
+      |> where([u], u.age in [1,2,20])
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age IN (1,2,20)}
+  end
+
   describe "functions" do
     test "token" do
       query =
