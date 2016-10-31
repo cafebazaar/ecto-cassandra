@@ -17,8 +17,8 @@ defmodule Cassandra.Ecto do
 
   ### API ###
 
-  def to_cql(query, operation) do
-    {query, _, _} = apply(__MODULE__, operation, [query, []])
+  def to_cql(query, operation, options \\ []) do
+    {query, _, _} = apply(__MODULE__, operation, [query, options])
     query
   end
 

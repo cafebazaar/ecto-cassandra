@@ -202,9 +202,9 @@ defmodule EctoTest do
   test "fragments" do
     query =
       User
-      |> where([u], u.join_at < fragment("now()"))
+      |> where([u], u.joined_at < fragment("now()"))
       |> select([:id])
-    assert cql(query) == ~s{SELECT id FROM users WHERE join_at < now()}
+    assert cql(query) == ~s{SELECT id FROM users WHERE joined_at < now()}
 
     query = select(User, [u], fragment(age: 20))
     assert_raise Ecto.QueryError, fn ->
@@ -250,17 +250,6 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE data = bigintAsBlob(9999999999999)}
   end
 
-  # test "tagged type" do
-  #   query = Schema |> select([], type(^"601d74e4-a8d3-4b6e-8365-eddb4c893327", Ecto.UUID)) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT cast(? as uuid) FROM "schema" AS s0}
-  #
-  #   query = Schema |> select([], type(^1, Custom.Permalink)) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT $1::integer FROM "schema" AS s0}
-  #
-  #   query = Schema |> select([], type(^[1,2,3], {:array, Custom.Permalink})) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT $1::integer[] FROM "schema" AS s0}
-  # end
-
   test "nested expressions" do
     z = 123
     query =
@@ -290,19 +279,77 @@ defmodule EctoTest do
     assert cql(query) == String.rstrip(result)
   end
 
+  # TODO use ecto.datetime
   describe "functions" do
     test "token" do
       query =
         User
         |> where([u], u.id < token("sometest"))
-        |> select([u], as_blob(u.name, :text))
-      assert cql(query) == ~s{SELECT textAsBlob(name) FROM users WHERE id < token('sometest')}
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == ~s{SELECT textAsBlob(data) FROM users WHERE id < token('sometest')}
+    end
+
+    test "cast" do
+      query =
+        User
+        |> where([u], u.id < cast("sometest", :timeuuid))
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == ~s{SELECT textAsBlob(data) FROM users WHERE id < cast('sometest' as timeuuid)}
+    end
+
+    test "uuid" do
+      query =
+        User
+        |> where([u], u.cat_id == uuid())
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE cat_id = uuid()}
+    end
+
+    test "now" do
+      query =
+        User
+        |> where([u], u.joined_at >= now())
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= now()}
+    end
+
+    test "timeuuid" do
+      query =
+        User
+        |> where([u], u.id >= min_timeuuid("2013-01-01 00:05+0000"))
+        |> where([u], u.id <= max_timeuuid("2016-01-01 00:05+0000"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE id >= minTimeuuid('2013-01-01 00:05+0000') AND id <= maxTimeuuid('2016-01-01 00:05+0000')}
+    end
+
+    test "to date" do
+      query =
+        User
+        |> where([u], u.id == to_date("54d6e-29bb-11e5-b345-feff819cdc9f"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE id = toDate('54d6e-29bb-11e5-b345-feff819cdc9f')}
+    end
+
+    test "to timestamp" do
+      query =
+        User
+        |> where([u], u.joined_at >= to_timestamp("Thu, 21 May 2015 18:18:43 GMT"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= toTimestamp('Thu, 21 May 2015 18:18:43 GMT')}
+    end
+
+    test "to unix timestamp" do
+      query =
+        User
+        |> where([u], u.joined_at >= to_unix_timestamp("Thu, 21 May 2015 18:18:43 GMT"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= toUnixTimestamp('Thu, 21 May 2015 18:18:43 GMT')}
     end
   end
 
-  defp cql(query, operation \\ :all, counter \\ 0) do
+  defp cql(query, operation \\ :all, options \\ [], counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
-    Cassandra.Ecto.to_cql(query, operation)
+    Cassandra.Ecto.to_cql(query, operation, options)
   end
 end
