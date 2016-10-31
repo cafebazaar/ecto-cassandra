@@ -212,6 +212,55 @@ defmodule EctoTest do
     end
   end
 
+  test "literals" do
+    query =
+      User
+      |> where(is_student: true)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE is_student = TRUE}
+
+    query =
+      User
+      |> where(is_student: false)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE is_student = FALSE}
+
+    query =
+      User
+      |> where(name: "John")
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE name = 'John'}
+
+    query =
+      User
+      |> where(age: 20)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE age = 20}
+
+    query =
+      User
+      |> where(score: 98.2)
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE score = 98.2}
+
+    query =
+      User
+      |> where(data: as_blob(9999999999999, :bigint))
+      |> select([:id])
+    assert cql(query) == ~s{SELECT id FROM users WHERE data = bigintAsBlob(9999999999999)}
+  end
+
+  # test "tagged type" do
+  #   query = Schema |> select([], type(^"601d74e4-a8d3-4b6e-8365-eddb4c893327", Ecto.UUID)) |> normalize
+  #   assert SQL.all(query) == ~s{SELECT cast(? as uuid) FROM "schema" AS s0}
+  #
+  #   query = Schema |> select([], type(^1, Custom.Permalink)) |> normalize
+  #   assert SQL.all(query) == ~s{SELECT $1::integer FROM "schema" AS s0}
+  #
+  #   query = Schema |> select([], type(^[1,2,3], {:array, Custom.Permalink})) |> normalize
+  #   assert SQL.all(query) == ~s{SELECT $1::integer[] FROM "schema" AS s0}
+  # end
+
   describe "functions" do
     test "token" do
       query =
