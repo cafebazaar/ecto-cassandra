@@ -1,7 +1,7 @@
 defmodule EctoTest do
   use ExUnit.Case, async: true
 
-  import Ecto.Query
+  use Cassandra.Ecto.Query
 
   defmodule User do
     use Ecto.Schema
@@ -152,6 +152,16 @@ defmodule EctoTest do
       |> where(name: "'")
       |> select([u], u.id)
     assert cql(query) == ~s{SELECT id FROM users WHERE name = ''''}
+  end
+
+  describe "functions" do
+    test "token" do
+      query =
+        User
+        |> where([u], u.id < token("sometest"))
+        |> select([u], as_blob(u.name, :text))
+      assert cql(query) == ~s{SELECT textAsBlob(name) FROM users WHERE id < token('sometest')}
+    end
   end
 
   defp cql(query, operation \\ :all, counter \\ 0) do
