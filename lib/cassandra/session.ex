@@ -15,8 +15,8 @@ defmodule Cassandra.Session do
 
   ### Client API ###
 
-  def start_link(cluster, options \\ [], opts \\ []) do
-    GenServer.start_link(__MODULE__, [cluster, options], opts)
+  def start_link(cluster, options \\ [], gen_options \\ []) do
+    GenServer.start_link(__MODULE__, [cluster, options], gen_options)
   end
 
   def notify(session, message) do
@@ -68,19 +68,12 @@ defmodule Cassandra.Session do
   end
 
   def handle_call({:send, request}, from, state) do
-    case CQL.encode(request) do
-      :error ->
-        {:reply, {:error, :encode_error}, state}
-
-      encoded ->
-        handle_send(request, encoded, from, state)
-    end
+    handle_send(request, from, state)
   end
 
   def handle_call({:prepare, statement}, from, state) do
     prepare = %CQL.Prepare{query: statement}
-    encoded = CQL.encode(prepare)
-    send_through_self(prepare, encoded, {from, statement}, state)
+    send_through_self(prepare, {from, statement}, state)
   end
 
   def handle_call({:execute, statement, options}, from, state)
@@ -187,10 +180,10 @@ defmodule Cassandra.Session do
         GenServer.reply(from, reply)
         {:noreply, state}
 
-      {{from, prepare, encoded, hash, options}, state} ->
+      {{from, prepare, hash, options}, state} ->
         case result do
           {:ok, _} ->
-            execute(prepare, encoded, hash, options, from, state)
+            execute(prepare, hash, options, from, state)
           {:error, error} ->
             GenServer.reply(from, error)
             {:noreply, state}
@@ -200,25 +193,17 @@ defmodule Cassandra.Session do
 
   ### Helpers ###
 
-  defp send_through_self(request, encoded, data, state) do
+  defp send_through_self(request, data, state) do
     ref = make_ref
     next_state = put_in(state.refs[ref], data)
-    handle_send(request, encoded, {self, ref}, next_state)
+    handle_send(request, {self, ref}, next_state)
   end
 
-  defp handle_send(request, from, state) do
-    handle_send(request, CQL.encode(request), from, state)
-  end
-
-  defp handle_send(_, :error, _, state) do
-    {:reply, {:error, :encode_error}, state}
-  end
-
-  defp handle_send(request, encoded, from, %{hosts: hosts, balancer: balancer, retry: retry} = state) do
+  defp handle_send(request, from, %{hosts: hosts, balancer: balancer, retry: retry} = state) do
     if open_connections_count(hosts) < 1 do
-      {:noreply, %{state | requests: [{from, request, encoded} | state.requests]}}
+      {:noreply, %{state | requests: [{from, request} | state.requests]}}
     else
-      start_task({from, request, encoded}, hosts, balancer, retry)
+      start_task({from, request}, hosts, balancer, retry)
       {:noreply, state}
     end
   end
@@ -227,23 +212,22 @@ defmodule Cassandra.Session do
     prepare = %CQL.Prepare{query: statement}
     encoded = CQL.encode(prepare)
     hash = :crypto.hash(:md5, encoded)
-    execute(prepare, encoded, hash, options, from, state)
+    execute(prepare, hash, options, from, state)
   end
 
-  defp execute(prepare, encoded, hash, options, from, state) do
+  defp execute(prepare, hash, options, from, state) do
     preferred_hosts =
       state.hosts
       |> Map.values
       |> Enum.filter(&Host.has_prepared?(&1, hash))
 
     if open_connections_count(preferred_hosts) == 0 do
-      send_through_self(prepare, encoded, {from, prepare, encoded, hash, options}, state)
+      send_through_self(prepare, {from, prepare, hash, options}, state)
     else
       host = hd(preferred_hosts)
       prepared = host.prepared_statements[hash]
       execute = %CQL.Execute{prepared: prepared, params: struct(CQL.QueryParams, options)}
-      encoded = CQL.encode(execute)
-      start_task({from, execute, encoded}, preferred_hosts, state.balancer, state.retry)
+      start_task({from, execute}, preferred_hosts, state.balancer, state.retry)
       {:noreply, state}
     end
   end
@@ -267,9 +251,9 @@ defmodule Cassandra.Session do
     |> Enum.map(&key/1)
   end
 
-  defp start_task({from, request, encoded}, hosts, balancer, retry) do
+  defp start_task({from, request}, hosts, balancer, retry) do
     conns = select(request, hosts, balancer)
-    Task.start(Worker, :send_request, [request, encoded, from, conns, retry])
+    Task.start(Worker, :send_request, [request, from, conns, retry])
   end
 
   defp send_requests(%{hosts: hosts, balancer: balancer, retry: retry} = state) do
