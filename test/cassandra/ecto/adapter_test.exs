@@ -13,6 +13,9 @@ defmodule EctoTest do
       field :cat_id, Ecto.UUID
       field :name, :string
       field :age,  :integer
+      field :is_student, :boolean
+      field :score, :float
+      field :data, :binary
       field :joined_at, Ecto.DateTime
     end
   end
