@@ -277,6 +277,19 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE age IN (1,2,20)}
   end
 
+  test "fragments allow ? to be escaped with backslash" do
+    query =
+      from(u in User,
+        where: fragment("? = \"query\\?\"", u.joined_at),
+        select: [:id])
+
+    result =
+      "SELECT id FROM users" <>
+      " WHERE joined_at = \"query?\""
+
+    assert cql(query) == String.rstrip(result)
+  end
+
   describe "functions" do
     test "token" do
       query =
