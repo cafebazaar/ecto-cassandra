@@ -1,4 +1,9 @@
 defmodule Cassandra.Connection do
+  @moduledoc """
+  A Connection is a process to handle single connection to a one Cassandra host
+  to send requests and parse responses.
+  """
+
   use Connection
 
   require Logger
@@ -25,39 +30,108 @@ defmodule Cassandra.Connection do
 
   # Client API
 
-  def start(options \\ []) do
-    {name, options} = Keyword.pop(options, :name)
-    Connection.start(__MODULE__, options, [name: name])
+  @doc """
+  Starts a Connection process without links (outside of a supervision tree).
+
+  See start_link/2 for more information.
+  """
+  def start(options \\ [], gen_server_options \\ []) do
+    Connection.start(__MODULE__, options, gen_server_options)
   end
 
-  def start_link(options \\ []) do
-    {name, options} = Keyword.pop(options, :name)
-    Connection.start_link(__MODULE__, options, [name: name])
+  @doc """
+  Starts a Connection process linked to the current process.
+
+  For `gen_server_options` values see `GenServer.start_link/3`.
+
+  ## Options
+
+  * `:host` - Cassandra host to connecto to (default: `"127.0.0.1"`)
+  * `:port` - Cassandra native protocol port (default: `9042`)
+  * `:async_init` - when false call to `start_link/2` will block until connection establishment (default: `true`)
+  * `:connection_timeout` - connection timeout in milliseconds (defult: `5000`)
+  * `:timeout` - request execution timeout in milliseconds (default: `:infinity`)
+  * `:keyspace` - name of keyspace to bind connection to
+  * `:reconnection_policy` - module which implements Cassandra.Reconnection.Policy (defult: `Exponential`)
+  * `:reconnection_args` - list of arguments to pass to `:reconnection_policy` on init (defult: `[]`)
+  * `:event_manager` - pid of GenServer process for handling events
+  * `:session` - pid of Cassandra.Session process to add this connection to
+
+  ## Return values
+
+  If `:async_init` options is set it returns `{:ok, pid}`, otherwise `:async_init` is `false`
+  it returns `{:ok, pid}` after opening connection sending handshake and seting keyspace, and on error
+  it returns `{:error, reason}` where reason is one of `:connection_failed`, `:handshake_error` or `:keyspace_error`.
+  """
+  def start_link(options \\ [], gen_server_options \\ []) do
+    Connection.start_link(__MODULE__, options, gen_server_options)
   end
 
+  @doc """
+  Sends the `request` synchronously on `connection` and waits for it's response.
+
+  For `timeout` values see `GenServer.call/3`.
+
+  ## Return values
+
+  `{:ok, :done}` when cassandra response is VOID in response to some queries
+
+  `{:ok, :ready}` when cassandra response is READY in response to `Register` requests
+
+  `{:ok, data}` where data is one of the following structs:
+
+    * `CQL.Supported`
+    * `CQL.Result.SetKeyspace`
+    * `CQL.Result.SchemaChange`
+    * `CQL.Result.Prepared`
+    * `CQL.Result.Rows`
+
+  `{:error, {code, message}}` when cassandra response is an error
+
+  `{:error, :closed}` when connection closed
+
+  `{:error, :not_connected}` when connection not established yet (for queuing requests use `Session`)
+
+  `{:error, :invalid}` when `request` is not a valid cql request frame binary
+
+  `{:error, reason}` otherwise
+  """
   def send(connection, request, timeout \\ @call_timeout) do
     Connection.call(connection, {:send_request, request}, timeout)
   end
 
+  @doc """
+  Sends the `request` asynchronously on `connection`.
+
+  It returns a `ref` reference and when response is ready it will be sent to calling process as `{ref, result}` tuple.
+
+  See `send/3' for `result` types.
+  """
   def send_async(connection, request) do
     send_async(connection, request, {self, make_ref})
   end
 
-  def send_async(connection, request, {pid, ref}) do
+  @doc false
+  def send_async(connection, request, _from = {pid, ref}) do
     Connection.cast(connection, {:send_request, request, {pid, ref}})
     ref
   end
 
+  @doc false
   def send_fail?({:ok, _}), do: false
   def send_fail?({:error, {_, _}}), do: false # is cql error
   def send_fail?({:error, _}), do: true # is connection error
 
-  def stop(connection) do
-    GenServer.stop(connection)
+  @doc """
+  Stops the connection server with the given `reason`.
+  """
+  def stop(connection, reason \\ :normal, timeout \\ :infinity) do
+    GenServer.stop(connection, reason, timeout)
   end
 
   # Connection Callbacks
 
+  @doc false
   def init(options) do
     options = Keyword.merge(@default_options, options)
 
@@ -97,17 +171,21 @@ defmodule Cassandra.Connection do
       with {:ok, socket} <- startup(state) do
         after_connect(socket, state)
       else
-        _ -> {:stop, :connection_failed}
+        {:stop, reason} ->
+          {:stop, reason}
+        _ ->
+          {:stop, :connection_failed}
       end
     end
   end
 
+  @doc false
   def connect(_info, state) do
     with {:ok, socket} <- startup(state) do
       after_connect(socket, state)
     else
-      :stop ->
-        {:stop, {:shutdown, :handshake_error}, state}
+      {:stop, reason} ->
+        {:stop, {:shutdown, reason}, state}
       _ ->
         case Reconnection.next(state.reconnection) do
           :stop ->
@@ -120,6 +198,7 @@ defmodule Cassandra.Connection do
     end
   end
 
+  @doc false
   def disconnect(info, %{socket: socket} = state) do
     :ok = TCP.close(socket)
 
@@ -146,12 +225,14 @@ defmodule Cassandra.Connection do
     {:connect, :reconnect, next_state}
   end
 
+  @doc false
   def terminate(reason, state) do
     reply_all(state, {:error, :closed})
     notify(state, :connection_stopped)
     reason
   end
 
+  @doc false
   def handle_cast({:send_request, request, from}, state) do
     case send_request(request, from, state) do
       {:ok, state} ->
@@ -161,10 +242,12 @@ defmodule Cassandra.Connection do
     end
   end
 
+  @doc false
   def handle_call({:send_request, _}, _, %{socket: nil} = state) do
     {:reply, {:error, :not_connected}, state}
   end
 
+  @doc false
   def handle_call({:send_request, request}, from, state) do
     case send_request(request, from, state) do
       {:ok, state} ->
@@ -174,18 +257,22 @@ defmodule Cassandra.Connection do
     end
   end
 
+  @doc false
   def handle_info({:tcp, socket, data}, %{socket: socket} = state) do
     handle_data(data, state)
   end
 
+  @doc false
   def handle_info({:tcp_error, socket, reason}, %{socket: socket} = state) do
     {:disconnect, {:error, reason}, state}
   end
 
+  @doc false
   def handle_info({:tcp_closed, socket}, %{socket: socket} = state) do
     {:disconnect, {:error, :closed}, state}
   end
 
+  @doc false
   def handle_info(:timeout, state) do
     {:disconnect, :timeout, state}
   end
@@ -235,7 +322,7 @@ defmodule Cassandra.Connection do
     {:ok, next_state}
   end
 
-  defp handle_response(%Frame{stream: id, body: {%Rows{} = data, paging}}, state) do
+  defp handle_response(%Frame{stream: id, body: {%Rows{rows: rows} = data, paging}}, state) do
     {{request, from}, next_state} = pop_in(state.streams[id])
     manager = case from do
       {:gen_event, manager} ->
@@ -244,11 +331,11 @@ defmodule Cassandra.Connection do
       from ->
         {:ok, manager} = GenEvent.start_link
         stream = GenEvent.stream(manager)
-        Connection.reply(from, {:stream, stream, data.columns})
+        Connection.reply(from, {:ok, %{data | rows: stream, rows_count: nil}})
         manager
     end
 
-    Enum.map(data.rows, &GenEvent.ack_notify(manager, &1))
+    Enum.map(rows, &GenEvent.ack_notify(manager, &1))
 
     next_request = %{request | params: %{request.params | paging_state: paging}}
 
@@ -278,7 +365,7 @@ defmodule Cassandra.Connection do
         {:ok, :done}
 
       %Prepared{} = prepared ->
-        notify(state, {:prepared, :crypto.hash(:md5, request), prepared})
+        notify(state, {:prepared, hash(request), prepared})
         {:ok, prepared}
 
       response ->
@@ -334,7 +421,28 @@ defmodule Cassandra.Connection do
          :ok <- set_keyspace(socket, keyspace, timeout)
     do
       {:ok, socket}
+    else
+      {:stop, reason, error} ->
+        log_error(error)
+        {:stop, reason}
+
+      {:error, error} ->
+        log_error(error)
+        :error
     end
+  end
+
+  defp log_error(%Error{code: code, message: message}) do
+    Logger.error("#{__MODULE__} error[#{code}] #{message}")
+  end
+
+  defp log_error(:closed) do
+    Logger.error("#{__MODULE__} connection closed")
+  end
+
+  defp log_error(reason) do
+    message = :inet.format_error(reason)
+    Logger.error("#{__MODULE__} connection error: #{message}")
   end
 
   defp after_connect(socket, state) do
@@ -355,12 +463,21 @@ defmodule Cassandra.Connection do
     TCP.send(socket, request)
   end
 
-  defp send_to(socket, request, id) do
+  defp send_to(socket, request, id) when is_bitstring(request) do
     case CQL.set_stream_id(request, id) do
       {:ok, request_with_id} ->
         send_to(socket, request_with_id)
       :error ->
         {:error, :invalid}
+    end
+  end
+
+  defp send_to(socket, request, id) do
+    case CQL.encode(request, id) do
+      :error ->
+        {:error, :invalid}
+      request_with_id ->
+        send_to(socket, request_with_id)
     end
   end
 
@@ -372,12 +489,10 @@ defmodule Cassandra.Connection do
     do
       :ok
     else
-      {%Frame{body: %Error{code: code, message: message}}, _} ->
-        Logger.error("#{__MODULE__} [#{inspect code}] #{message}")
-        :stop
+      {%Frame{body: %Error{} = error}, _} ->
+        {:stop, :keyspace_error, error}
       error ->
-        Logger.error("#{__MODULE__} unexpected #{inspect error}")
-        :stop
+        {:stop, :keyspace_error, error}
     end
   end
 
@@ -388,19 +503,10 @@ defmodule Cassandra.Connection do
     do
       :ok
     else
-      {%Frame{body: %Error{code: code, message: message}}, _} ->
-        Logger.error("#{__MODULE__} error[#{code}] #{message}")
-        :stop
-      {:error, :closed} ->
-        Logger.error("#{__MODULE__} connection closed before handshake")
-        :error
-      {:error, reason} ->
-        message = :inet.format_error(reason)
-        Logger.error("#{__MODULE__} handshake error: #{message}")
-        :error
+      {%Frame{body: %Error{} = error}, _} ->
+        {:stop, :handshake_error, error}
       error ->
-        Logger.error("#{__MODULE__} handshake error: #{inspect error}")
-        :error
+        {:error, error}
     end
   end
 
@@ -412,4 +518,12 @@ defmodule Cassandra.Connection do
 
   defp next_stream_id(32768), do: 2
   defp next_stream_id(n), do: n + 1
+
+  defp hash(request) when is_bitstring(request) do
+    :crypto.hash(:md5, request)
+  end
+
+  defp hash(request) do
+    request |> CQL.encode |> hash
+  end
 end

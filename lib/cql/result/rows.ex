@@ -5,7 +5,6 @@ defmodule CQL.Result.Rows do
     :columns,
     :rows,
     :rows_count,
-    :paging_state,
   ]
 
   def decode(buffer) do
