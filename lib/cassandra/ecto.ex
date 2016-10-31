@@ -195,7 +195,7 @@ defmodule Cassandra.Ecto do
 
   defp lock(%{lock: nil}), do: nil
   defp lock(%{lock: "ALLOW FILTERING"}), do: "ALLOW FILTERING"
-  defp lock(query), do: error!(query, "Cassandra do not support locking")
+  defp lock(query), do: error!(query, "Cassandra does not support locking")
 
   defp using(nil, nil),       do: nil
   defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
@@ -210,7 +210,7 @@ defmodule Cassandra.Ecto do
   defp boolean(exprs, sources, query) do
     Enum.map_join exprs, " AND ", fn
       %BooleanExpr{expr: expr, op: :and} -> expr(expr, sources, query)
-      %BooleanExpr{op: :or} -> error!(query, "Cassandra do not support OR operator")
+      %BooleanExpr{op: :or} -> error!(query, "Cassandra does not support OR operator")
     end
   end
 
@@ -284,10 +284,6 @@ defmodule Cassandra.Ecto do
 
   defp call_type(func, _arity), do: {:func, Atom.to_string(func)}
 
-  defp paren_expr(expr, sources, query) do
-    "(" <> expr(expr, sources, query) <> ")"
-  end
-
   defp expr({:^, [], [_]}, _sources, _query), do: "?"
 
   defp expr({{:., _, [{:&, _, [_]}, field]}, _, []}, _sources, _query) when is_atom(field) do
@@ -298,10 +294,26 @@ defmodule Cassandra.Ecto do
     Enum.map_join(fields, ", ", &identifier/1)
   end
 
-  defp expr({:in, _, [left, right]}, sources, query) do
+  defp expr({:in, _, [left, right]}, sources, query) when is_list(right) do
     left = in_arg(left, sources, query)
     right = in_arg(right, sources, query)
     "#{left} IN #{right}"
+  end
+
+  defp expr({:in, _, [_, {:^, _, _}]}, _sources, query) do
+    error!(query, "Cassandra does not support NOT IN relation")
+  end
+
+  defp expr({:is_nil, _, _}, _sources, query) do
+    error!(query, "Cassandra does not support IS NULL relation")
+  end
+
+  defp expr({:not, _, _}, _sources, query) do
+    error!(query, "Cassandra does not support NOT relation")
+  end
+
+  defp expr({:or, _, _}, _sources, query) do
+    error!(query, "Cassandra does not support OR operator")
   end
 
   defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
@@ -315,8 +327,8 @@ defmodule Cassandra.Ecto do
     end
   end
 
-  defp expr({:or, _, _}, _sources, query) do
-    error!(query, "Cassandra do not support OR operator")
+  defp expr(list, sources, query) when is_list(list) do
+    "(" <> Enum.map_join(list, ", ", &expr(&1, sources, query)) <> ")"
   end
 
   defp expr({fun, _, args}, sources, query)

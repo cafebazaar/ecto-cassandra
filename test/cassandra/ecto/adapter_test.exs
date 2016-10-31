@@ -69,12 +69,12 @@ defmodule EctoTest do
   end
 
   test "or" do
-    assert_raise Ecto.QueryError, ~r/Cassandra do not support OR operator/, fn ->
-      IO.inspect cql(from u in User, where: u.name == "Jack", or_where: u.age > 10, select: u.name)
+    assert_raise Ecto.QueryError, ~r/Cassandra does not support OR operator/, fn ->
+      cql(from u in User, where: u.name == "Jack", or_where: u.age > 10, select: u.name)
     end
 
-    assert_raise Ecto.QueryError, ~r/Cassandra do not support OR operator/, fn ->
-      IO.inspect cql(from u in User, where: u.name == "Jack" or u.age > 10, select: u.name)
+    assert_raise Ecto.QueryError, ~r/Cassandra does not support OR operator/, fn ->
+      cql(from u in User, where: u.name == "Jack" or u.age > 10, select: u.name)
     end
   end
 
