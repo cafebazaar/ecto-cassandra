@@ -290,13 +290,71 @@ defmodule EctoTest do
     assert cql(query) == String.rstrip(result)
   end
 
+  # TODO use ecto.datetime
   describe "functions" do
     test "token" do
       query =
         User
         |> where([u], u.id < token("sometest"))
-        |> select([u], as_blob(u.name, :text))
-      assert cql(query) == ~s{SELECT textAsBlob(name) FROM users WHERE id < token('sometest')}
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == ~s{SELECT textAsBlob(data) FROM users WHERE id < token('sometest')}
+    end
+
+    test "cast" do
+      query =
+        User
+        |> where([u], u.id < cast("sometest", :timeuuid))
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == ~s{SELECT textAsBlob(data) FROM users WHERE id < cast('sometest' as timeuuid)}
+    end
+
+    test "uuid" do
+      query =
+        User
+        |> where([u], u.cat_id == uuid())
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE cat_id = uuid()}
+    end
+
+    test "now" do
+      query =
+        User
+        |> where([u], u.joined_at >= now())
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= now()}
+    end
+
+    test "timeuuid" do
+      query =
+        User
+        |> where([u], u.id >= min_timeuuid("2013-01-01 00:05+0000"))
+        |> where([u], u.id <= max_timeuuid("2016-01-01 00:05+0000"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE id >= minTimeuuid('2013-01-01 00:05+0000') AND id <= maxTimeuuid('2016-01-01 00:05+0000')}
+    end
+
+    test "to date" do
+      query =
+        User
+        |> where([u], u.id == to_date("54d6e-29bb-11e5-b345-feff819cdc9f"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE id = toDate('54d6e-29bb-11e5-b345-feff819cdc9f')}
+    end
+
+    test "to timestamp" do
+      query =
+        User
+        |> where([u], u.joined_at >= to_timestamp("Thu, 21 May 2015 18:18:43 GMT"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= toTimestamp('Thu, 21 May 2015 18:18:43 GMT')}
+    end
+
+    test "to unix timestamp" do
+      query =
+        User
+        |> where([u], u.joined_at >= to_unix_timestamp("Thu, 21 May 2015 18:18:43 GMT"))
+        |> select([u], u.name)
+      assert cql(query) == ~s{SELECT name FROM users WHERE joined_at >= toUnixTimestamp('Thu, 21 May 2015 18:18:43 GMT')}
     end
   end
 
