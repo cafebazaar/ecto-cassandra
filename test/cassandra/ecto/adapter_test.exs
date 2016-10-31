@@ -65,6 +65,12 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE name = 'John' AND age >= 90}
   end
 
+  test "or" do
+    assert_raise Ecto.QueryError, ~r/Cassandra do not support OR operator/, fn ->
+      IO.inspect cql(from u in User, where: u.name == "Jack", or_where: u.age > 10, select: u.name)
+    end
+  end
+
   test "order by" do
     query =
       User

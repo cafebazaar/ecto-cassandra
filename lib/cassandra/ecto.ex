@@ -30,7 +30,7 @@ defmodule Cassandra.Ecto do
       group_by(query, sources),
       order_by(query, sources),
       limit(query, sources),
-      lock(query.lock),
+      lock(query),
     ])
 
     {query, [], options}
@@ -193,9 +193,9 @@ defmodule Cassandra.Ecto do
     "LIMIT " <> expr(expr, sources, query)
   end
 
-  defp lock(nil), do: nil
-  defp lock("ALLOW FILTERING"), do: "ALLOW FILTERING"
-  defp lock(_), do: raise ArgumentError, "Cassandra do not support locking"
+  defp lock(%{lock: nil}), do: nil
+  defp lock(%{lock: "ALLOW FILTERING"}), do: "ALLOW FILTERING"
+  defp lock(query), do: error!(query, "Cassandra do not support locking")
 
   defp using(nil, nil),       do: nil
   defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
@@ -210,12 +210,12 @@ defmodule Cassandra.Ecto do
   defp boolean(exprs, sources, query) do
     Enum.map_join exprs, " AND ", fn
       %BooleanExpr{expr: expr, op: :and} -> expr(expr, sources, query)
-      %BooleanExpr{op: :or} -> raise ArgumentError, "Cassandra do not support OR in query"
+      %BooleanExpr{op: :or} -> error!(query, "Cassandra do not support OR operator")
     end
   end
 
-  defp select_fields([], _sources, _query) do
-    raise ArgumentError, "bad select clause"
+  defp select_fields([], _sources, query) do
+    error!(query, "bad select clause")
   end
 
   defp select_fields(fields, sources, query) do
@@ -304,8 +304,8 @@ defmodule Cassandra.Ecto do
     "#{left} IN #{right}"
   end
 
-  defp expr({:fragment, _, [kw]}, _sources, _query) when is_list(kw) or tuple_size(kw) == 3 do
-    raise ArgumentError, "Cassandra adapter does not support keyword or interpolated fragments for now!"
+  defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
+    error!(query, "Cassandra adapter does not support keyword or interpolated fragments")
   end
 
   defp expr({:fragment, _, parts}, sources, query) do
@@ -363,5 +363,9 @@ defmodule Cassandra.Ecto do
 
   defp binary_op_arg_expr(expr, sources, query) do
     expr(expr, sources, query)
+  end
+
+  defp error!(query, message) do
+    raise Ecto.QueryError, query: query, message: message
   end
 end
