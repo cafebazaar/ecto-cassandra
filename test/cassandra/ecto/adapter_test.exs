@@ -250,17 +250,6 @@ defmodule EctoTest do
     assert cql(query) == ~s{SELECT id FROM users WHERE data = bigintAsBlob(9999999999999)}
   end
 
-  # test "tagged type" do
-  #   query = Schema |> select([], type(^"601d74e4-a8d3-4b6e-8365-eddb4c893327", Ecto.UUID)) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT cast(? as uuid) FROM "schema" AS s0}
-  #
-  #   query = Schema |> select([], type(^1, Custom.Permalink)) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT $1::integer FROM "schema" AS s0}
-  #
-  #   query = Schema |> select([], type(^[1,2,3], {:array, Custom.Permalink})) |> normalize
-  #   assert SQL.all(query) == ~s{SELECT $1::integer[] FROM "schema" AS s0}
-  # end
-
   test "nested expressions" do
     z = 123
     query =
