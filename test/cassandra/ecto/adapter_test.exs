@@ -417,6 +417,63 @@ defmodule EctoTest do
     end
   end
 
+  describe "errors" do
+    test "invalid flield name" do
+      query = select(User, [:"bad name"])
+      assert_raise ArgumentError, ~r/bad identifier/, fn ->
+        cql(query)
+      end
+    end
+
+    test "invalid table name" do
+      query = select("bad table", [:id])
+      assert_raise ArgumentError, ~r/bad table name/, fn ->
+        cql(query)
+      end
+    end
+
+    test "not" do
+      query =
+        User
+        |> where([u], not(u.cat_id))
+        |> select([u], u.id)
+      assert_raise Ecto.QueryError, ~r/Cassandra does not support NOT relation/, fn ->
+        cql(query)
+      end
+    end
+
+    test "support locking" do
+      query =
+        User
+        |> lock("FOR UPDATE")
+        |> where([u], u.age <= 18)
+        |> select([u], u.id)
+      assert_raise Ecto.QueryError, ~r/Cassandra does not support locking/, fn ->
+        cql(query)
+      end
+    end
+
+    test "not in" do
+      query =
+        User
+        |> where([u], u.age in ^[])
+        |> select([u], u.id)
+      assert_raise Ecto.QueryError, ~r/Cassandra does not support NOT IN relation/, fn ->
+        cql(query)
+      end
+    end
+
+    test "is nil" do
+      query =
+        User
+        |> where([u], is_nil(u.age))
+        |> select([u], u.id)
+      assert_raise Ecto.QueryError, ~r/Cassandra does not support IS NULL relation/, fn ->
+        cql(query)
+      end
+    end
+  end
+
   defp cql(query, operation \\ :all, options \\ [], counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
     query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
