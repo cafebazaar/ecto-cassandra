@@ -10,7 +10,7 @@ defmodule Cassandra.Cluster do
 
   require Logger
 
-  alias Cassandra.{Host, Session}
+  alias Cassandra.Host
   alias Cassandra.Cluster.Registery
 
   @select_peers CQL.encode(%CQL.Query{query: "SELECT * FROM system.peers;"})
