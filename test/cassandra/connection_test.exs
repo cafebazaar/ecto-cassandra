@@ -84,8 +84,8 @@ defmodule Cassandra.ConnectionTest do
     end
 
     test "SetKeyspace", %{conn: conn} do
-      request = query("USE test;")
-      assert {:ok, %CQL.Result.SetKeyspace{name: "test"}} = Connection.send(conn, request)
+      request = query("USE elixir_cassandra_test;")
+      assert {:ok, %CQL.Result.SetKeyspace{name: "elixir_cassandra_test"}} = Connection.send(conn, request)
     end
 
     test "SchemaChange", %{conn: conn} do
