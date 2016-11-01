@@ -307,6 +307,27 @@ defmodule EctoTest do
                     ["John", 27], []}
   end
 
+  test "update" do
+    query = Cassandra.Ecto.update(
+      nil,
+      "users",
+      [name: "John", age: 27],
+      [id: "54d6e-29bb-11e5-b345-feff819cdc9f"],
+      []
+    )
+    assert query == {"UPDATE users SET name = ?, age = ? WHERE id = ?",
+                    ["John", 27, "54d6e-29bb-11e5-b345-feff819cdc9f"], []}
+
+    query = Cassandra.Ecto.update(
+      "u",
+      "users",
+      [name: "John", age: 27],
+      [id: "54d6e-29bb-11e5-b345-feff819cdc9f"],
+      []
+    )
+    assert query == {"UPDATE u.users SET name = ?, age = ? WHERE id = ?",
+                    ["John", 27, "54d6e-29bb-11e5-b345-feff819cdc9f"], []}
+  end
   # TODO use ecto.datetime
   describe "functions" do
     test "token" do
