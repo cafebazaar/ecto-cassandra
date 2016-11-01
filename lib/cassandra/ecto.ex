@@ -2,8 +2,8 @@ defmodule Cassandra.Ecto do
 
   alias Ecto.Query.BooleanExpr
 
-  @identifier ~r/[a-zA-Z][a-zA-Z0-9_]*/
-  @unquoted_name ~r/[a-zA-Z_0-9]{1,48}/
+  @identifier ~r/^[a-zA-Z][a-zA-Z0-9_]*$/
+  @unquoted_name ~r/^[a-zA-Z_0-9]{1,48}$/
   @binary_operators_map %{
     :==  => "=",
     :<   => "<",
