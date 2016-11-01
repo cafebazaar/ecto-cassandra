@@ -3,6 +3,8 @@ ExCheck.start
 
 alias Cassandra.Connection
 
+Logger.configure(level: :info)
+
 defmodule Cassandra.TestHelper do
   @keyspace "elixir_cassandra_test"
 
