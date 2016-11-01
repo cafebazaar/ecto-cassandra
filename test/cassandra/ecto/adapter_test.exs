@@ -328,6 +328,17 @@ defmodule EctoTest do
     assert query == {"UPDATE u.users SET name = ?, age = ? WHERE id = ?",
                     ["John", 27, "54d6e-29bb-11e5-b345-feff819cdc9f"], []}
   end
+
+  test "delete" do
+    query = Cassandra.Ecto.delete(nil, "users", [name: "John", age: 27], [])
+    assert query == {"DELETE FROM users WHERE name = ? AND age = ?",
+                    ["John", 27], []}
+
+    query = Cassandra.Ecto.delete("u", "users", [name: "John", age: 27], [])
+    assert query == {"DELETE FROM u.users WHERE name = ? AND age = ?",
+                    ["John", 27], []}
+  end
+
   # TODO use ecto.datetime
   describe "functions" do
     test "token" do
