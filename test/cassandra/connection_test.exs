@@ -3,28 +3,23 @@ defmodule Cassandra.ConnectionTest do
 
   alias Cassandra.Connection
 
-  @host "127.0.0.1"
-
   defp query(str, options \\ []) do
     CQL.encode(%CQL.Query{query: str, params: struct(CQL.QueryParams, options)})
   end
 
   @moduletag capture_log: true
 
-  setup_all do
-    {:ok, conn} = Connection.start_link(host: @host, async_init: false)
-    {:ok, _} = Connection.send conn, query("DROP KEYSPACE IF EXISTS elixir_cassandra_test;")
-    {:ok, _} = Connection.send conn, query("""
-      CREATE KEYSPACE elixir_cassandra_test
-      WITH replication = {'class':'SimpleStrategy','replication_factor':1};
-    """)
+  @host     Cassandra.TestHelper.host
+  @keyspace Cassandra.TestHelper.keyspace
+  @table_name "users"
 
-    :ok = Connection.stop(conn)
+  @truncate_table %CQL.Query{
+    query: "TRUNCATE #{@table_name};"
+  }
 
-    {:ok, conn} = Connection.start_link(host: @host, async_init: false, keyspace: "elixir_cassandra_test")
-
-    {:ok, _} = Connection.send conn, query("""
-      CREATE TABLE users (
+  @create_table %CQL.Query{
+    query: """
+      CREATE TABLE #{@table_name} (
         id uuid,
         name varchar,
         age int,
@@ -32,18 +27,17 @@ defmodule Cassandra.ConnectionTest do
         joined_at timestamp,
         PRIMARY KEY (id)
       );
-    """)
+    """
+  }
 
-    on_exit fn ->
-      {:ok, conn} = Connection.start_link(host: @host, async_init: false)
-      {:ok, _} = Connection.send conn, query("DROP KEYSPACE IF EXISTS elixir_cassandra_test;")
-    end
-
+  setup_all do
+    {:ok, conn} = Connection.start_link(host: @host, async_init: false, keyspace: @keyspace)
+    {:ok, _} = Connection.send(conn, @create_table)
     {:ok, %{conn: conn}}
   end
 
   setup %{conn: conn} do
-    {:ok, :done} = Connection.send(conn, query("TRUNCATE users;"))
+    {:ok, :done} = Connection.send(conn, @truncate_table)
     :ok
   end
 
@@ -74,8 +68,7 @@ defmodule Cassandra.ConnectionTest do
 
   describe "send" do
     test ":done", %{conn: conn} do
-      request = query("TRUNCATE users;")
-      assert {:ok, :done} = Connection.send(conn, request)
+      assert {:ok, :done} = Connection.send(conn, @truncate_table)
     end
 
     test ":ready", %{conn: conn} do
@@ -84,14 +77,13 @@ defmodule Cassandra.ConnectionTest do
     end
 
     test "SetKeyspace", %{conn: conn} do
-      request = query("USE elixir_cassandra_test;")
-      assert {:ok, %CQL.Result.SetKeyspace{name: "elixir_cassandra_test"}} = Connection.send(conn, request)
+      assert {:ok, %CQL.Result.SetKeyspace{name: @keyspace}} =
+        Connection.send(conn, query("USE #{@keyspace};"))
     end
 
     test "SchemaChange", %{conn: conn} do
       request = query("DROP TABLE IF EXISTS names;")
       assert {:ok, _} = Connection.send(conn, request)
-
       request = query """
         CREATE TABLE names (
           id uuid,
@@ -108,7 +100,7 @@ defmodule Cassandra.ConnectionTest do
     end
 
     test "Prepared", %{conn: conn} do
-      prepare = %CQL.Prepare{query: "SELECT * FROM users;"}
+      prepare = %CQL.Prepare{query: "SELECT * FROM #{@table_name};"}
       assert {:ok, %CQL.Result.Prepared{}} = Connection.send(conn, prepare)
 
       request = CQL.encode(prepare)
@@ -116,18 +108,22 @@ defmodule Cassandra.ConnectionTest do
     end
 
     test "Rows", %{conn: conn} do
-      request = CQL.encode(%CQL.Prepare{query: "INSERT INTO users (id, name, age) VALUES (now(), ?, ?);"})
+      request = %CQL.Prepare{query: "INSERT INTO #{@table_name} (id, name, age) VALUES (now(), ?, ?);"}
       assert {:ok, insert} = Connection.send(conn, request)
 
-      request = CQL.encode(%CQL.Execute{prepared: insert, params: %CQL.QueryParams{values: ["John", 32]}})
+      request = %CQL.Execute{prepared: insert, params: %CQL.QueryParams{values: ["John", 32]}}
       assert {:ok, :done} = Connection.send(conn, request)
 
-      request = query("SELECT name, age FROM users;")
-      assert {:ok, %CQL.Result.Rows{rows_count: 1, columns: ["name", "age"], rows: [["John", 32]]}} = Connection.send(conn, request)
+      request = %CQL.Query{query: "SELECT name, age FROM #{@table_name};"}
+      assert {:ok, %CQL.Result.Rows{rows_count: 1, columns: ["name", "age"], rows: [["John", 32]]}} =
+        Connection.send(conn, request)
     end
 
     test "stream", %{conn: conn} do
-      request = %CQL.Query{query: "SELECT table_name FROM system_schema.tables;", params: %CQL.QueryParams{page_size: 2}}
+      request = %CQL.Query{
+        query: "SELECT table_name FROM system_schema.tables;",
+        params: %CQL.QueryParams{page_size: 2},
+      }
       assert {:ok, %CQL.Result.Rows{rows: rows, rows_count: nil}} = Connection.send(conn, request)
       assert %GenEvent.Stream{} = rows
       assert Enum.count(rows) > 1
@@ -138,12 +134,16 @@ defmodule Cassandra.ConnectionTest do
     end
 
     test "CQL Error", %{conn: conn} do
-      assert {:error, {:syntax_error, message}} = Connection.send(conn, query("SELEC * FROM tests;"))
+      assert {:error, {:syntax_error, message}} =
+        Connection.send(conn, query("SELEC * FROM tests;"))
       assert message =~ "'SELEC'"
+
+      assert {:error, {:invalid, "unconfigured table not_existing_table"}} =
+        Connection.send(conn, query("SELECT * FROM not_existing_table;"))
     end
 
     test "CQL Events" do
-      assert {:ok, conn} = Connection.start_link(host: @host, async_init: false, keyspace: "elixir_cassandra_test", event_manager: self)
+      assert {:ok, conn} = Connection.start_link(host: @host, async_init: false, keyspace: @keyspace, event_manager: self)
       assert {:ok, :ready} = Connection.send(conn, %CQL.Register{})
 
       create = query """
