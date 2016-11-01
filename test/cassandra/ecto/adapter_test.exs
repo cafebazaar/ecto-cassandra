@@ -1,6 +1,7 @@
 defmodule EctoTest do
   use ExUnit.Case, async: true
 
+  import Cassandra.Ecto
   use Cassandra.Ecto.Query
 
   defmodule User do
@@ -279,6 +280,20 @@ defmodule EctoTest do
     assert cql(query) == String.rstrip(result)
   end
 
+  ## *_all
+
+  test "delete all" do
+    assert cql(from(User), :delete_all) == ~s{TRUNCATE users}
+
+    query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f")
+    assert cql(query, :delete_all) == ~s{DELETE FROM users WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f'}
+
+    query = from(u in User, where: u.age >= 27)
+    assert cql(query, :delete_all) == ~s{DELETE FROM users WHERE age >= 27}
+
+    query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f")
+    assert cql(query, :delete_all, if: :exists) == ~s{DELETE FROM users WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f' IF EXISTS}
+  end
   # TODO use ecto.datetime
   describe "functions" do
     test "token" do
