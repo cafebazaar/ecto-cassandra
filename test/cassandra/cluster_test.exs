@@ -8,7 +8,7 @@ defmodule Cassandra.ClusterTest do
   @host Cassandra.TestHelper.host
 
   test "no_avaliable_contact_points" do
-    assert {:error, :no_avaliable_contact_points} = Cluster.start_link(["127.0.0.1"], [port: 9111])
+    assert {:error, :no_avaliable_contact_points} = Cluster.start(["127.0.0.1"], [port: 9111])
   end
 
   test "hosts" do

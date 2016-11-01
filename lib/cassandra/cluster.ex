@@ -1,6 +1,7 @@
 defmodule Cassandra.Cluster do
   @moduledoc """
-  A Cluster is a process to discover hosts of a Cassandra cluster and fetch/keep their metadata.
+  Represents a cassandra cluster. It serves as a Session factory and a collection of metadata.
+
   It always keeps a control connection open to one of cluster hosts to get notified about
   topological and status changes in the cluster, and keeps its metadata is sync.
   """

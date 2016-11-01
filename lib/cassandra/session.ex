@@ -1,4 +1,8 @@
 defmodule Cassandra.Session do
+  @moduledoc """
+  Session is a server for handling query execution.
+  """
+
   use GenServer
 
   require Logger
@@ -9,41 +13,112 @@ defmodule Cassandra.Session do
   @defaults [
     reconnection_policy: Reconnection.Exponential,
     reconnection_args: [],
+    async_init: true,
   ]
 
   @default_balancer %LoadBalancing.RoundRobin{}
 
   ### Client API ###
 
-  def start_link(cluster, options \\ [], gen_options \\ []) do
-    GenServer.start_link(__MODULE__, [cluster, options], gen_options)
+  @doc """
+  Starts a session on the `cluster` with given `options`, linked to current process.
+
+  ## Options
+
+    * `:balancer` - Cassandra.LoadBalancing.Policy to use
+    * `:port` - Cassandra native protocol port (default: `9042`)
+    * `:connection_timeout` - connection timeout in milliseconds (defult: `5000`)
+    * `:timeout` - query execution timeout in milliseconds (default: `:infinity`)
+    * `:keyspace` - name of keyspace to bind session to
+    * `:reconnection_policy` - module which implements Cassandra.Reconnection.Policy (defult: `Exponential`)
+    * `:reconnection_args` - list of arguments to pass to `:reconnection_policy` on init (defult: `[]`)
+
+  Retutns `{:ok, pid}` or `{:error, reason}`.
+  """
+  def start_link(cluster, options \\ [], gen_server_options \\ []) do
+    GenServer.start_link(__MODULE__, [cluster, options], gen_server_options)
   end
 
+  @doc false
   def notify(session, message) do
     GenServer.cast(session, {:notify, message})
   end
 
-  def execute(session, statement, options) do
-    GenServer.call(session, {:execute, statement, options})
+  @doc """
+  Executes the `query` with given `options` on `session`.
+
+  If `query` is not prepared, `session` prepares it automatically.
+
+  ## Return values
+
+  `{:ok, :done}` when cassandra response is VOID in response to some queries
+
+  `{:ok, data}` where data is one of the following structs:
+
+    * `CQL.Result.SetKeyspace`
+    * `CQL.Result.SchemaChange`
+    * `CQL.Result.Rows`
+
+  `{:error, {code, message}}` when cassandra response is an error
+  """
+  def execute(session, query, options \\ []) do
+    GenServer.call(session, {:execute, query, options})
   end
 
+  @doc """
+  Prepares the `query` for later execution.
+
+  It returns `{:ok, query}` on success and `{:error, {code, message}}` when cassandra response is an error
+  """
   def prepare(session, statement) do
     GenServer.call(session, {:prepare, statement})
   end
 
+  @doc """
+  Sends `request` through `session`.
+
+  `request` must be a `CQL.Request`.
+
+  ## Return values
+
+  `{:ok, :done}` when cassandra response is VOID in response to some queries
+
+  `{:ok, :ready}` when cassandra response is READY in response to `Register` requests
+
+  `{:ok, data}` where data is one of the following structs:
+
+    * `CQL.Supported`
+    * `CQL.Result.SetKeyspace`
+    * `CQL.Result.SchemaChange`
+    * `CQL.Result.Prepared`
+    * `CQL.Result.Rows`
+
+  `{:error, {code, message}}` when cassandra response is an error
+  """
   def send(session, request) do
     GenServer.call(session, {:send, request})
   end
 
   ### GenServer Callbacks ###
 
+  @doc false
   def init([cluster, options]) do
+    balancer = Keyword.get(options, :balancer, @default_balancer)
+    retry = Keyword.get(options, :retry, &retry?/1)
+
+    connection_options = Keyword.take(options, [
+      :port,
+      :connection_timeout,
+      :timeout,
+      :keyspace,
+      :reconnection_policy,
+      :reconnection_args,
+    ])
+
     options =
       @defaults
-      |> Keyword.merge(options)
+      |> Keyword.merge(connection_options)
       |> Keyword.put(:session, self)
-
-    {balancer, options} = Keyword.pop(options, :balancer, @default_balancer)
 
     Cluster.register(cluster, self)
 
@@ -53,7 +128,7 @@ defmodule Cassandra.Session do
       cluster: cluster,
       options: options,
       balancer: balancer,
-      retry: &retry?/1,
+      retry: retry,
       hosts: %{},
       requests: [],
       statements: %{},
@@ -63,19 +138,18 @@ defmodule Cassandra.Session do
     {:ok, state}
   end
 
-  def handle_call(:state, _, state) do
-    {:reply, state, state}
-  end
-
+  @doc false
   def handle_call({:send, request}, from, state) do
     handle_send(request, from, state)
   end
 
+  @doc false
   def handle_call({:prepare, statement}, from, state) do
     prepare = %CQL.Prepare{query: statement}
     send_through_self(prepare, {from, statement}, state)
   end
 
+  @doc false
   def handle_call({:execute, statement, options}, from, state)
   when is_bitstring(statement)
   do
@@ -87,6 +161,7 @@ defmodule Cassandra.Session do
     end
   end
 
+  @doc false
   def handle_cast({:notify, {change, {id, conn}}}, %{hosts: hosts} = state) do
     hosts = case change do
       :connection_opened ->
@@ -117,6 +192,7 @@ defmodule Cassandra.Session do
     {:noreply, state}
   end
 
+  @doc false
   def handle_cast({:notify, {change, id}}, %{hosts: hosts, balancer: balancer} = state) do
     hosts = case change do
       :host_up ->
@@ -146,6 +222,7 @@ defmodule Cassandra.Session do
     {:noreply, %{state | hosts: hosts}}
   end
 
+  @doc false
   def handle_info(:connect, %{balancer: balancer, options: options} = state) do
     hosts =
       state.cluster
@@ -158,6 +235,7 @@ defmodule Cassandra.Session do
     {:noreply, %{state | hosts: hosts}}
   end
 
+  @doc false
   def handle_info({:DOWN, _ref, :process, conn, _reason}, %{hosts: hosts} = state) do
     Logger.warn("#{__MODULE__} connection lost")
     hosts =
@@ -167,6 +245,7 @@ defmodule Cassandra.Session do
     {:noreply, %{state | hosts: hosts}}
   end
 
+  @doc false
   def handle_info({ref, result}, state) do
     case pop_in(state.refs[ref]) do
       {nil, state} ->
