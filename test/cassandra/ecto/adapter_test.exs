@@ -294,6 +294,19 @@ defmodule EctoTest do
     query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f")
     assert cql(query, :delete_all, if: :exists) == ~s{DELETE FROM users WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f' IF EXISTS}
   end
+
+  # Schema based
+
+  test "insert" do
+    query = Cassandra.Ecto.insert(nil, "users", [name: "John", age: 27], [])
+    assert query == {"INSERT INTO users (name, age) VALUES (?, ?)",
+                    ["John", 27], []}
+
+    query = Cassandra.Ecto.insert("u", "users", [name: "John", age: 27], [])
+    assert query == {"INSERT INTO u.users (name, age) VALUES (?, ?)",
+                    ["John", 27], []}
+  end
+
   # TODO use ecto.datetime
   describe "functions" do
     test "token" do
