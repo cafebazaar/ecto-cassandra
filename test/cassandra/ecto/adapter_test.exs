@@ -286,6 +286,10 @@ defmodule EctoTest do
     name = "Fredric"
     query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f", update: [set: [name: ^name]])
     assert cql(query, :update_all) == ~s{UPDATE users SET name = ? WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f'}
+
+    name = "John"
+    query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f" , update: [set: [name: ^name], inc: [age: -3]])
+    assert cql(query, :update_all) == ~s{UPDATE users SET name = ?, age = age + -3 WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f'}
   end
 
   test "delete_all" do
