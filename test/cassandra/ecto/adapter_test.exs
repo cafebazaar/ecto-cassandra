@@ -1,7 +1,6 @@
 defmodule EctoTest do
   use ExUnit.Case, async: true
 
-  import Cassandra.Ecto
   use Cassandra.Ecto.Query
 
   defmodule User do
@@ -280,9 +279,16 @@ defmodule EctoTest do
     assert cql(query) == String.rstrip(result)
   end
 
-  ## *_all
+  test "update_all" do
+    query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f", update: [set: [name: "Jesse"]])
+    assert cql(query, :update_all) == ~s{UPDATE users SET name = 'Jesse' WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f'}
 
-  test "delete all" do
+    name = "Fredric"
+    query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f", update: [set: [name: ^name]])
+    assert cql(query, :update_all) == ~s{UPDATE users SET name = ? WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f'}
+  end
+
+  test "delete_all" do
     assert cql(from(User), :delete_all) == ~s{TRUNCATE users}
 
     query = from(u in User, where: u.id == "54d6e-29bb-11e5-b345-feff819cdc9f")

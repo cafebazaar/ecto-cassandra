@@ -55,6 +55,43 @@ defmodule Cassandra.Ecto do
     {query, values, options}
   end
 
+  def update_all(%{sources: sources} = query, options) do
+    {query, values} = assemble_values([
+      "UPDATE",
+      table_name(query),
+      using(options[:ttl], options[:timestamp]),
+      update_fields(query, sources),
+      where(query, sources),
+      ifelse(options[:if] == :exists, "IF EXISTS", nil),
+    ])
+
+    options = Keyword.drop(options, [:if, :ttl, :timestamp])
+
+    {query, values, options}
+  end
+
+  defp update_fields(%{updates: updates} = query, sources) do
+    fields = for %{expr: expr} <- updates,
+        {op, kw} <- expr,
+        {key, value} <- kw
+    do
+      update_op(op, key, value, sources, query)
+    end
+    "SET #{Enum.join(fields, ", ")}"
+  end
+
+  defp update_op(op, key, value, sources, query) do
+    field = identifier(key)
+    value = expr(value, sources, query)
+    case op do
+      :set  -> "#{field} = #{value}"
+      :inc  -> "#{field} = #{field} + #{value}"
+      :push -> "#{field} = #{field} + [#{value}]"
+      :pull -> "#{field} = #{field} - [#{value}]"
+      other -> error!(query, "Unknown update operation #{inspect other} for Cassandra")
+    end
+  end
+
   def insert(prefix, source, fields, options) do
     {query, values} = assemble_values([
       "INSERT INTO",
