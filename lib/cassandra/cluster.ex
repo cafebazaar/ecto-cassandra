@@ -1,4 +1,10 @@
 defmodule Cassandra.Cluster do
+  @moduledoc """
+  A Cluster is a process to discover hosts of a Cassandra cluster and fetch/keep their metadata.
+  It always keeps a control connection open to one of cluster hosts to get notified about
+  topological and status changes in the cluster, and keeps its metadata is sync.
+  """
+
   use GenServer
 
   require Logger
@@ -12,30 +18,63 @@ defmodule Cassandra.Cluster do
 
   ### Client API ###
 
-  def start(contact_points \\ ["127.0.0.1"], options \\ [], opts \\ []) do
-    GenServer.start(__MODULE__, [contact_points, options], opts)
+  @doc """
+  Starts a Cluster process without links (outside of a supervision tree).
+
+  See start_link/3 for more information.
+  """
+  def start(contact_points \\ ["127.0.0.1"], options \\ [], gen_server_options \\ []) do
+    GenServer.start(__MODULE__, [contact_points, options], gen_server_options)
   end
 
-  def start_link(contact_points \\ ["127.0.0.1"], options \\ [], opts \\ []) do
-    GenServer.start(__MODULE__, [contact_points, options], opts)
+  @doc """
+  Starts a Cluster process linked to the current process.
+
+  `contact_points` is the initial list of addresses.  Note that the entire list
+  of cluster members will be discovered automatically once a connection to any
+  hosts from the original list is successful.
+
+  ## Options
+
+  These are options which will be used to connect to `contact_points`.
+
+  * `:port` - Cassandra native protocol port (default: `9042`)
+  * `:connection_timeout` - connection timeout in milliseconds (defult: `5000`)
+  * `:timeout` - request execution timeout in milliseconds (default: `:infinity`)
+  * `:reconnection_policy` - module which implements Cassandra.Reconnection.Policy (defult: `Exponential`)
+  * `:reconnection_args` - list of arguments to pass to `:reconnection_policy` on init (defult: `[]`)
+
+  For `gen_server_options` values see `GenServer.start_link/3`.
+
+  ## Return values
+
+  It returns `{:ok, pid}` when connection to one of `contact_points` established and metadata fetched,
+  on any error it returns `{:error, reason}`.
+  """
+  def start_link(contact_points \\ ["127.0.0.1"], options \\ [], gen_server_options \\ []) do
+    GenServer.start(__MODULE__, [contact_points, options], gen_server_options)
   end
 
+  @doc """
+  Returns the all known hosts of a cluster as map with IPs as key and Cassandra.Host structs as values
+  """
   def hosts(cluster) do
     GenServer.call(cluster, :hosts)
   end
 
+  @doc false
   def register(cluster, session) do
     GenServer.cast(cluster, {:register, session})
   end
 
-  def connect_link(cluster, options \\ []) do
-    Session.start_link(cluster, options)
-  end
-
   ### GenServer Callbacks ###
 
+  @doc false
   def init([contact_points, options]) do
-    options = Keyword.put(options, :event_manager, self)
+    options =
+      options
+      |> Keyword.take([:port, :connection_timeout, :timeout, :reconnection_policy, :reconnection_args])
+      |> Keyword.put(:event_manager, self)
 
     with {:ok, conn, local} <- setup(contact_points, options),
          {:ok, peers} <- Cassandra.Connection.send(conn, @select_peers),
@@ -69,6 +108,7 @@ defmodule Cassandra.Cluster do
     end
   end
 
+  @doc false
   def handle_cast({:notify, event}, %{hosts: hosts, sessions: sessions} = state) do
     hosts = case event_type(event) do
       {:host_found, address} ->
@@ -92,14 +132,17 @@ defmodule Cassandra.Cluster do
     {:noreply, %{state | hosts: hosts}}
   end
 
+  @doc false
   def handle_cast({:register, session}, %{sessions: sessions} = state) do
     {:noreply, %{state | sessions: [session | sessions]}}
   end
 
+  @doc false
   def handle_call(:hosts, _from, state) do
     {:reply, state.hosts, state}
   end
 
+  @doc false
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     Logger.warn("#{__MODULE__} control connection lost")
     contact_points = Map.keys(state.hosts)
@@ -133,7 +176,7 @@ defmodule Cassandra.Cluster do
         Process.monitor(conn)
         {:ok, conn, local}
       [] ->
-        {:error, :no_host_avaliable}
+        {:error, :no_avaliable_contact_points}
     end
   end
 

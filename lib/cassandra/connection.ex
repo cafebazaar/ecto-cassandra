@@ -42,8 +42,6 @@ defmodule Cassandra.Connection do
   @doc """
   Starts a Connection process linked to the current process.
 
-  For `gen_server_options` values see `GenServer.start_link/3`.
-
   ## Options
 
   * `:host` - Cassandra host to connecto to (default: `"127.0.0.1"`)
@@ -56,6 +54,8 @@ defmodule Cassandra.Connection do
   * `:reconnection_args` - list of arguments to pass to `:reconnection_policy` on init (defult: `[]`)
   * `:event_manager` - pid of GenServer process for handling events
   * `:session` - pid of Cassandra.Session process to add this connection to
+
+  For `gen_server_options` values see `GenServer.start_link/3`.
 
   ## Return values
 

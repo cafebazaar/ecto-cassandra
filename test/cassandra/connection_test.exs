@@ -9,7 +9,7 @@ defmodule Cassandra.ConnectionTest do
 
   @moduletag capture_log: true
 
-  @host     Cassandra.TestHelper.host
+  @host Cassandra.TestHelper.host
   @keyspace Cassandra.TestHelper.keyspace
   @table_name "users"
 
