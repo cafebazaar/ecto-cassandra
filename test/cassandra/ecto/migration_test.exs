@@ -82,6 +82,33 @@ defmodule EctoMigrationTest do
       """
   end
 
+  test "create table with options" do
+    create = {:create, table(:posts,
+      [options: "WITH CLUSTERING ORDER BY (created_at DESC)"]),[
+      {:add, :id, :id, [partition_key: true]},
+      {:add, :created_at, :timestamp, []},
+      {:add, :name, :string, []},
+    ]}
+
+    assert cql(create) == join """
+      CREATE TABLE posts (id uuid,
+        created_at timestamp,
+        name text,
+        PRIMARY KEY (id))
+        WITH CLUSTERING ORDER BY (created_at DESC)
+      """
+
+    create = {:create, table(:posts,
+      [options: "WITH compaction = { 'class' : 'LeveledCompactionStrategy' }"]),[
+      {:add, :id, :id, [partition_key: true]},
+      {:add, :name, :string, []},
+    ]}
+
+    assert cql(create) == join """
+      CREATE TABLE posts (id uuid,
+        name text,
+        PRIMARY KEY (id))
+        WITH compaction = { 'class' : 'LeveledCompactionStrategy' }
       """
   end
 
