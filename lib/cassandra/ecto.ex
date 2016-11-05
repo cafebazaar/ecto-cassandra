@@ -515,7 +515,15 @@ defmodule Cassandra.Ecto do
   end
 
   defp table_options(%Table{options: nil, comment: nil}), do: nil
-  defp table_options(%Table{options: nil, comment: comment}), do: "WITH comment=#{expr(comment, nil, nil)}"
+
+  defp table_options(%Table{options: nil, comment: comment}) do
+    "WITH comment=#{expr(comment, nil, nil)}"
+  end
+
+  defp table_options(%Table{options: options, comment: nil}) do
+    options
+  end
+
   defp table_options(%Table{options: options, comment: comment}) do
     "#{options} AND comment=#{expr(comment, nil, nil)}"
   end
@@ -576,7 +584,11 @@ defmodule Cassandra.Ecto do
     if Keyword.has_key?(options, :static) do
       "STATIC"
     else
-      nil
+      if Keyword.has_key?(options, :comment) do
+        migration_support_error!("columns comment")
+      else
+        nil
+      end
     end
   end
 
