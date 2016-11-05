@@ -1,9 +1,23 @@
 defmodule Cassandra.Ecto.Adapter do
   require Logger
 
-  ### Ecto.Adapter Callbacks ###
-
   @behaviour Ecto.Adapter
+  @behaviour Ecto.Adapter.Migration
+
+  ### Ecto.Adapter.Migration Callbacks ###
+
+  def execute_ddl(repo, definitions, options) do
+    cql = Cassandra.Ecto.ddl(definitions)
+
+    case repo.execute(cql, options) do
+      {:ok, :done} -> :ok
+      error        -> throw error
+    end
+  end
+
+  def supports_ddl_transaction?, do: false
+
+  ### Ecto.Adapter Callbacks ###
 
   defmacro __before_compile__(env) do
     config = Module.get_attribute(env.module, :config)

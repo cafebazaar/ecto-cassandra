@@ -2,6 +2,9 @@ defmodule Cassandra.Ecto do
 
   alias Ecto.Query.BooleanExpr
 
+  alias Ecto.Migration.{Table, Index, Reference}
+
+  @index_name ~r/^[a-zA-Z_0-9]+$/
   @identifier ~r/^[a-zA-Z][a-zA-Z0-9_]*$/
   @unquoted_name ~r/^[a-zA-Z_0-9]{1,48}$/
   @binary_operators_map %{
@@ -139,6 +142,63 @@ defmodule Cassandra.Ecto do
     {query, values, options}
   end
 
+  def ddl({command, %Table{} = table, columns})
+  when command in [:create, :create_if_not_exists]
+  do
+    assemble [
+      "CREATE TABLE",
+      ifelse(command == :create_if_not_exists, "IF NOT EXISTS", nil),
+      table_name(table.prefix, table.name),
+      column_definitions(columns),
+      table_options(table),
+    ]
+  end
+
+  def ddl({command, %Table{} = table})
+  when command in [:drop, :drop_if_exists]
+  do
+    assemble [
+      "DROP TABLE",
+      ifelse(command == :drop_if_exists, "IF EXISTS", nil),
+      table_name(table.prefix, table.name),
+    ]
+  end
+
+  def ddl({:alter, %Table{} = table, columns}) do
+    assemble [
+      "ALTER TABLE",
+      table_name(table.prefix, table.name),
+      column_changes(columns),
+      table_options(table),
+    ]
+  end
+
+  def ddl({command, %Index{} = index})
+  when command in [:create, :create_if_not_exists]
+  do
+    assemble [
+      "CREATE",
+      ifelse(index.using, "CUSTOM", nil),
+      "INDEX",
+      ifelse(command == :create_if_not_exists, "IF NOT EXISTS", nil),
+      index_name(index.prefix, index.name),
+      "ON",
+      table_name(index.prefix, index.table),
+      index_identifiers(index),
+      ifelse(index.using, "USING #{index.using}", nil),
+    ]
+  end
+
+  def ddl({command, %Index{} = index})
+  when command in [:drop, :drop_if_exists]
+  do
+    assemble [
+      "DROP INDEX",
+      ifelse(command == :drop_if_exists, "IF EXISTS", nil),
+      index_name(index.prefix, index.name),
+    ]
+  end
+
   ### Helpers ###
 
   defp values(fields) do
@@ -273,6 +333,21 @@ defmodule Cassandra.Ecto do
       name
     else
       raise ArgumentError, "bad identifier #{inspect name}"
+    end
+  end
+
+  defp index_name(nil, name),    do: index_name(name)
+  defp index_name(prefix, name), do: table_name(prefix) <> "." <> index_name(name)
+
+  defp index_name(name) when is_atom(name) do
+    name |> Atom.to_string |> index_name
+  end
+
+  defp index_name(name) do
+    if Regex.match?(@index_name, name) do
+      name
+    else
+      raise ArgumentError, "bad index name #{inspect name}"
     end
   end
 
@@ -424,5 +499,117 @@ defmodule Cassandra.Ecto do
 
   defp support_error!(query, message) do
     raise Ecto.QueryError, query: query, message: "Cassandra does not support #{message}"
+  end
+
+  defp migration_support_error!(message) do
+    raise Ecto.MigrationError, message: "Cassandra does not support #{message}"
+  end
+
+  defp index_identifiers(%Index{columns: columns}) do
+    fields = Enum.map_join columns, ", ", fn
+      literal when is_binary(literal) -> literal
+      name -> identifier(name)
+    end
+
+    "(#{fields})"
+  end
+
+  defp table_options(%Table{options: nil, comment: nil}), do: nil
+  defp table_options(%Table{options: nil, comment: comment}), do: "WITH comment=#{expr(comment, nil, nil)}"
+  defp table_options(%Table{options: options, comment: comment}) do
+    "#{options} AND comment=#{expr(comment, nil, nil)}"
+  end
+
+  defp primary_key_definition(columns) do
+    columns
+    |> Enum.filter(&primary_key?/1)
+    |> Enum.map_join(", ", fn {_, name, _, _} -> identifier(name) end)
+    |> case do
+      ""  -> raise Ecto.MigrationError, message: "Cassandra requires PRIMARY KEY"
+      pks -> "PRIMARY KEY (#{pks})"
+    end
+  end
+
+  defp primary_key?({_, _, _, options}) do
+    Keyword.has_key?(options, :primary_key)
+  end
+
+  defp column_definitions(columns) do
+    defs = Enum.map_join columns, ", ", &column_definition/1
+    pk   = primary_key_definition(columns)
+    "(#{defs}, #{pk})"
+  end
+
+  defp column_definition({_, _, %Reference{}, _}) do
+    migration_support_error! "references"
+  end
+
+  defp column_definition({:add, name, type, options}) do
+    assemble [
+      identifier(name),
+      column_type(type),
+      column_options(options),
+    ]
+  end
+
+  defp column_type({:map, {ktype, vtype}}) do
+    "MAP<#{column_type(ktype)},#{column_type(vtype)}>"
+  end
+
+  defp column_type({:array, type}) do
+    "LIST<#{column_type(type)}>"
+  end
+
+  defp column_type({:set, type}) do
+    "SET<#{column_type(type)}>"
+  end
+
+  defp column_type(:id),             do: "uuid"
+  defp column_type(:binary_id),      do: "timeuuid"
+  defp column_type(:string),         do: "text"
+  defp column_type(:binary),         do: "blob"
+  defp column_type(:utc_datetime),   do: "timestamp"
+  defp column_type(:naive_datetime), do: "timestamp"
+  defp column_type(other),           do: Atom.to_string(other)
+
+  defp column_options(options) do
+    if Keyword.has_key?(options, :static) do
+      "STATIC"
+    else
+      nil
+    end
+  end
+
+  defp column_changes([]), do: nil
+  defp column_changes([{change, _, _, _} | _] = columns) do
+    if Enum.all?(columns, fn {c, _, _, _} -> c == change end) do
+      column_changes(change, columns)
+    else
+      raise migration_support_error!("ALTER TABLE with different change types")
+    end
+  end
+
+  defp column_changes(:add, columns) do
+    changes = Enum.map_join columns, ", ", fn
+      {:add, name, type, _} -> "#{identifier(name)} #{column_type(type)}"
+    end
+
+    "ADD #{changes}"
+  end
+
+  defp column_changes(:remove, columns) do
+    changes = Enum.map_join columns, " ", fn
+      {:remove, name, _, _} -> identifier(name)
+    end
+
+    "DROP #{changes}"
+  end
+
+  defp column_changes(:modify, [{:modify, name, type, _options}]) do
+    "#{identifier(name)} TYPE #{column_type(type)}"
+  end
+
+  defp column_changes(:modify, _columns) do
+    migration_support_error!("altering multiple columns")
   end
 end
