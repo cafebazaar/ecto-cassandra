@@ -303,6 +303,7 @@ defmodule Cassandra.Ecto do
 
   defp ifelse(true,  a, _b), do: a
   defp ifelse(false, _a, b), do: b
+  defp ifelse(x, a, b), do: ifelse(is_nil(x), b, a)
 
   defp boolean(exprs, sources, query) do
     Enum.map_join exprs, " AND ", fn
