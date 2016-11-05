@@ -200,6 +200,57 @@ defmodule EctoMigrationTest do
       """
   end
 
+  test "create index" do
+    create = {:create, index(:posts, [:category_id, :permalink])}
+    assert cql(create) == join """
+        CREATE INDEX
+          posts_category_id_permalink_index ON posts (category_id, permalink)
+      """
+    create = {:create, index(:posts, ["lower(permalink)"], name: "posts_main")}
+    assert cql(create) == join """
+        CREATE INDEX
+          posts_main ON posts (lower(permalink))
+      """
+  end
+
+  test "create index with prefix" do
+    create = {:create, index(:posts, [:category_id], prefix: :foo)}
+    assert cql(create) == join """
+        CREATE INDEX
+          foo.posts_category_id_index ON foo.posts (category_id)
+      """
+  end
+
+  test "create index with if not exists" do
+    create = {:create_if_not_exists, index(:posts, [:category_id])}
+    assert cql(create) == join """
+        CREATE INDEX IF NOT EXISTS
+          posts_category_id_index ON posts (category_id)
+      """
+  end
+
+  test "create an index using a different type" do
+    create = {:create, index(:posts, [:category_id], using: "path.to.the.IndexClass")}
+    assert cql(create) == join """
+        CREATE CUSTOM INDEX
+          posts_category_id_index ON posts (category_id) USING path.to.the.IndexClass
+      """
+  end
+
+  test "drop index" do
+    create = {:drop, index(:posts, [:category_id])}
+    assert cql(create) == join """
+        DROP INDEX posts_category_id_index
+      """
+  end
+
+  test "drop index with prefix" do
+    create = {:drop, index(:posts, [:category_id], prefix: :foo)}
+    assert cql(create) == join """
+        DROP INDEX foo.posts_category_id_index
+      """
+  end
+
   describe "unsupported errors" do
     test "create table without primary key" do
       create = {:create, table(:posts, comment: "table comment"), [
