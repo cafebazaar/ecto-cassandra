@@ -72,13 +72,15 @@ defmodule EctoMigrationTest do
       {:add, :id, :id, [partition_key: true]},
       {:add, :cat_id, :timeuuid, [partition_key: true]},
       {:add, :name, :string, [clustering_column: true]},
+      {:add, :age, :int, [clustering_column: true]},
     ]}
 
     assert cql(create) == join """
       CREATE TABLE posts (id uuid,
         cat_id timeuuid,
         name text,
-        PRIMARY KEY ((id, cat_id), name))
+        age int,
+        PRIMARY KEY ((id, cat_id), name, age))
       """
   end
 
