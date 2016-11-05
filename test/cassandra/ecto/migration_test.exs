@@ -133,6 +133,18 @@ defmodule EctoMigrationTest do
         cql(create)
       end
     end
+
+    test "create table with comment on columns" do
+      create = {:create, table(:posts), [
+        {:add, :id, :id, [partition_key: true]},
+        {:add, :category, :string, [comment: "colums comment"]},
+      ]}
+
+      assert_raise Ecto.MigrationError, ~r/Cassandra does not support columns comment/, fn ->
+        cql(create)
+      end
+    end
+
   end
 
   defp join(str) do
