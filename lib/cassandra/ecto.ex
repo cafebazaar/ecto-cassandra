@@ -232,7 +232,7 @@ defmodule Cassandra.Ecto do
 
   defp lock(%{lock: nil}), do: nil
   defp lock(%{lock: "ALLOW FILTERING"}), do: "ALLOW FILTERING"
-  defp lock(query), do: error!(query, "Cassandra does not support locking")
+  defp lock(query), do: support_error!(query, "locking")
 
   defp using(nil, nil),       do: nil
   defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
@@ -247,7 +247,7 @@ defmodule Cassandra.Ecto do
   defp boolean(exprs, sources, query) do
     Enum.map_join exprs, " AND ", fn
       %BooleanExpr{expr: expr, op: :and} -> expr(expr, sources, query)
-      %BooleanExpr{op: :or} -> error!(query, "Cassandra does not support OR operator")
+      %BooleanExpr{op: :or} -> support_error!(query, "OR operator")
     end
   end
 
@@ -338,19 +338,19 @@ defmodule Cassandra.Ecto do
   end
 
   defp expr({:in, _, [_, {:^, _, _}]}, _sources, query) do
-    error!(query, "Cassandra does not support NOT IN relation")
+    support_error!(query, "NOT IN relation")
   end
 
   defp expr({:is_nil, _, _}, _sources, query) do
-    error!(query, "Cassandra does not support IS NULL relation")
+    support_error!(query, "IS NULL relation")
   end
 
   defp expr({:not, _, _}, _sources, query) do
-    error!(query, "Cassandra does not support NOT relation")
+    support_error!(query, "NOT relation")
   end
 
   defp expr({:or, _, _}, _sources, query) do
-    error!(query, "Cassandra does not support OR operator")
+    support_error!(query, "OR operator")
   end
 
   defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
@@ -420,5 +420,9 @@ defmodule Cassandra.Ecto do
 
   defp error!(query, message) do
     raise Ecto.QueryError, query: query, message: message
+  end
+
+  defp support_error!(query, message) do
+    raise Ecto.QueryError, query: query, message: "Cassandra does not support #{message}"
   end
 end
