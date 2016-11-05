@@ -529,17 +529,35 @@ defmodule Cassandra.Ecto do
   end
 
   defp primary_key_definition(columns) do
+    partition_key =
+      columns
+      |> Enum.filter(&partition_key?/1)
+      |> Enum.map(fn {_, name, _, _} -> identifier(name) end)
+
+    if match?([], partition_key) do
+      raise Ecto.MigrationError, message: "Cassandra requires PRIMARY KEY"
+    end
+
+    partition_key = case partition_key do
+      [partition_key] -> "#{partition_key}"
+      partition_keys  -> "(#{Enum.join(partition_keys, ", ")})"
+    end
+
     columns
-    |> Enum.filter(&primary_key?/1)
+    |> Enum.filter(&clustering_column?/1)
     |> Enum.map_join(", ", fn {_, name, _, _} -> identifier(name) end)
     |> case do
-      ""  -> raise Ecto.MigrationError, message: "Cassandra requires PRIMARY KEY"
-      pks -> "PRIMARY KEY (#{pks})"
+      "" -> "PRIMARY KEY (#{partition_key})"
+      cc -> "PRIMARY KEY (#{partition_key}, #{cc})"
     end
   end
 
-  defp primary_key?({_, _, _, options}) do
-    Keyword.has_key?(options, :primary_key)
+  defp partition_key?({_, _, _, options}) do
+    Keyword.has_key?(options, :partition_key)
+  end
+
+  defp clustering_column?({_, _, _, options}) do
+    Keyword.has_key?(options, :clustering_column)
   end
 
   defp column_definitions(columns) do
