@@ -5,7 +5,7 @@ defmodule EctoMigrationTest do
 
   test "create table" do
     create = {:create, table(:posts), [
-      {:add, :id, :id, [primary_key: true]},
+      {:add, :id, :id, [partition_key: true]},
       {:add, :name, :string, []},
       {:add, :price, :float, []},
       {:add, :on_hand, :integer, []},
@@ -28,7 +28,7 @@ defmodule EctoMigrationTest do
 
   test "create table with prefix" do
     create = {:create, table(:posts, prefix: :foo), [
-      {:add, :id, :id, [primary_key: true]},
+      {:add, :id, :id, [partition_key: true]},
       {:add, :category, :string, []}
     ]}
 
@@ -40,7 +40,7 @@ defmodule EctoMigrationTest do
 
   test "create table with comment" do
     create = {:create, table(:posts, comment: "table comment"), [
-      {:add, :id, :id, [primary_key: true]},
+      {:add, :id, :id, [partition_key: true]},
       {:add, :created_at, :timestamp, []},
     ]}
 
@@ -52,10 +52,10 @@ defmodule EctoMigrationTest do
       """
   end
 
-  test "create table with composite key" do
+  test "create table with composite partition key" do
     create = {:create, table(:posts), [
-      {:add, :id, :id, [primary_key: true]},
-      {:add, :cat_id, :timeuuid, [primary_key: true]},
+      {:add, :id, :id, [partition_key: true]},
+      {:add, :cat_id, :timeuuid, [partition_key: true]},
       {:add, :name, :string, []},
     ]}
 
@@ -63,7 +63,10 @@ defmodule EctoMigrationTest do
       CREATE TABLE posts (id uuid,
         cat_id timeuuid,
         name text,
-        PRIMARY KEY (id, cat_id))
+        PRIMARY KEY ((id, cat_id)))
+      """
+  end
+
       """
   end
 
@@ -80,7 +83,7 @@ defmodule EctoMigrationTest do
 
     test "create table with references" do
       create = {:create, table(:posts, comment: "table comment"), [
-        {:add, :id, :id, [primary_key: true]},
+        {:add, :id, :id, [partition_key: true]},
         {:add, :category, references(:category), []},
       ]}
 
