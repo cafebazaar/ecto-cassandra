@@ -52,6 +52,21 @@ defmodule EctoMigrationTest do
       """
   end
 
+  test "create table with composite key" do
+    create = {:create, table(:posts), [
+      {:add, :id, :id, [primary_key: true]},
+      {:add, :cat_id, :timeuuid, [primary_key: true]},
+      {:add, :name, :string, []},
+    ]}
+
+    assert cql(create) == join """
+      CREATE TABLE posts (id uuid,
+        cat_id timeuuid,
+        name text,
+        PRIMARY KEY (id, cat_id))
+      """
+  end
+
   describe "unsupported errors" do
     test "create table without primary key" do
       create = {:create, table(:posts, comment: "table comment"), [
