@@ -114,6 +114,21 @@ defmodule EctoMigrationTest do
       """
   end
 
+  test "drop table" do
+    drop = {:drop, table(:posts)}
+    assert cql(drop) == "DROP TABLE posts"
+  end
+
+  test "drop table with prefix" do
+    drop = {:drop, table(:posts, prefix: :foo)}
+    assert cql(drop) == "DROP TABLE foo.posts"
+  end
+
+  test "drop table with if exists" do
+    drop = {:drop_if_exists, table(:posts)}
+    assert cql(drop) == "DROP TABLE IF EXISTS posts"
+  end
+
   describe "unsupported errors" do
     test "create table without primary key" do
       create = {:create, table(:posts, comment: "table comment"), [
