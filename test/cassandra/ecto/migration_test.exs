@@ -129,6 +129,77 @@ defmodule EctoMigrationTest do
     assert cql(drop) == "DROP TABLE IF EXISTS posts"
   end
 
+  test "alter table add" do
+    alter = {:alter, table(:posts),[
+                {:add, :name, :ascii, []},
+                {:add, :cat_id, :uuid, []},
+              ]}
+
+    assert cql(alter) == join """
+        ALTER TABLE posts
+          ADD name ascii, cat_id uuid
+      """
+  end
+
+  test "alter table remove" do
+    alter = {:alter, table(:posts),[
+                {:remove, :name, :ascii, []},
+                {:remove, :cat_id, :uuid, []},
+              ]}
+
+    assert cql(alter) == join """
+        ALTER TABLE posts
+          DROP name cat_id
+      """
+  end
+
+  test "alter table modify" do
+    alter = {:alter, table(:posts),
+               [{:modify, :name, :ascii, []}]
+            }
+
+    assert cql(alter) == join """
+        ALTER TABLE posts
+          name TYPE ascii
+      """
+  end
+
+  test "alter table with comments on table" do
+    alter = {:alter, table(:posts, comment: "table comment"),
+               [{:modify, :name, :ascii, []}]
+            }
+
+    assert cql(alter) == join """
+        ALTER TABLE posts
+          name TYPE ascii
+          WITH comment='table comment'
+      """
+  end
+
+  test "alter table with options" do
+    alter = {:alter, table(:posts,
+              [options: "WITH compaction = { 'class' : 'LeveledCompactionStrategy' }"]),[
+                {:modify, :name, :ascii, []}
+            ]}
+
+    assert cql(alter) == join """
+        ALTER TABLE posts
+          name TYPE ascii
+          WITH compaction = { 'class' : 'LeveledCompactionStrategy' }
+      """
+  end
+
+  test "alter table with prefix" do
+    alter = {:alter, table(:posts, prefix: :foo),[
+                {:modify, :name, :ascii, []}
+            ]}
+
+    assert cql(alter) == join """
+        ALTER TABLE foo.posts
+          name TYPE ascii
+      """
+  end
+
   describe "unsupported errors" do
     test "create table without primary key" do
       create = {:create, table(:posts, comment: "table comment"), [
@@ -159,6 +230,27 @@ defmodule EctoMigrationTest do
 
       assert_raise Ecto.MigrationError, ~r/Cassandra does not support columns comment/, fn ->
         cql(create)
+      end
+    end
+
+    test "alter table with different change types" do
+      alter = {:alter, table(:posts),
+                 [{:modify, :name, :ascii, []},
+                  {:remove, :cat_id, :uuid, []},
+                ]}
+
+      assert_raise Ecto.MigrationError, ~r/Cassandra does not support ALTER TABLE with different change types/, fn ->
+        cql(alter)
+      end
+    end
+
+    test "alter table modifi multiple columns" do
+      alter = {:alter, table(:posts),[
+                 {:modify, :name, :ascii, []},
+                 {:modify, :age, :string, []}
+              ]}
+      assert_raise Ecto.MigrationError, ~r/Cassandra does not support altering multiple columns/, fn ->
+        cql(alter)
       end
     end
 
