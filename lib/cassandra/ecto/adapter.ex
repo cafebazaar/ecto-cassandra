@@ -3,6 +3,7 @@ defmodule Cassandra.Ecto.Adapter do
 
   @behaviour Ecto.Adapter
   @behaviour Ecto.Adapter.Migration
+  @behaviour Ecto.Adapter.Storage
 
   ### Ecto.Adapter.Migration Callbacks ###
 
@@ -16,6 +17,40 @@ defmodule Cassandra.Ecto.Adapter do
   end
 
   def supports_ddl_transaction?, do: false
+
+  ### Ecto.Adapter.Storage Callbacks ###
+
+  def storage_up(options) do
+    cql =
+      options
+      |> Keyword.put(:if_not_exists, true)
+      |> Cassandra.Ecto.create_keyspace
+
+    case run_query(cql, options) do
+      {:ok, %CQL.Result.SchemaChange{change_type: "CREATED", target: "KEYSPACE"}} ->
+        :ok
+      {:ok, :done} ->
+        {:error, :already_up}
+      {:error, {_code, error}} ->
+        {:error, error}
+    end
+  end
+
+  def storage_down(options) do
+    cql =
+      options
+      |> Keyword.put(:if_exists, true)
+      |> Cassandra.Ecto.drop_keyspace
+
+    case run_query(cql, options) do
+      {:ok, %CQL.Result.SchemaChange{change_type: "DROPPED", target: "KEYSPACE"}} ->
+        :ok
+      {:ok, :done} ->
+        {:error, :already_down}
+      {:error, {_code, error}} ->
+        {:error, error}
+    end
+  end
 
   ### Ecto.Adapter Callbacks ###
 
@@ -101,6 +136,17 @@ defmodule Cassandra.Ecto.Adapter do
   def rollback(_repo, _value), do: nil
 
   ### Helpers ###
+
+  defp run_query(cql, options) do
+    Logger.debug("Executing `#{cql}`")
+    options = Keyword.put(options, :keyspace, nil)
+    {:ok, cluster} = Cassandra.Cluster.start_link(options[:contact_points], options)
+    {:ok, session} = Cassandra.Session.start_link(cluster, options)
+    result = Cassandra.Session.execute(session, cql, options)
+    :ok = GenServer.stop(cluster)
+    :ok = GenServer.stop(session)
+    result
+  end
 
   defp exec(repo, cql, values, options, on_conflict \\ :error) do
     Logger.debug("Executing `#{cql}` with values: #{inspect values}")

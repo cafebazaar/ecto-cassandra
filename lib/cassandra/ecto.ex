@@ -199,6 +199,43 @@ defmodule Cassandra.Ecto do
     ]
   end
 
+  def create_keyspace(options) do
+    keyspace = Keyword.fetch!(options, :keyspace) || raise ":keyspace is nil in repository configuration"
+
+    replication =
+      options
+      |> Keyword.get(:replication, [])
+      |> Enum.map_join(", ", fn {key, value} -> "#{expr(key, nil, nil)}: #{expr(value, nil, nil)}" end)
+
+    if replication == "" do
+      raise ":replication is nil in repository configuration"
+    end
+
+    durable_writes = Keyword.get(options, :durable_writes)
+
+    with_cluse = case durable_writes do
+      nil -> "WITH replication = {#{replication}}"
+      _   -> "WITH replication = {#{replication}} AND durable_writes = #{durable_writes}"
+    end
+
+    assemble [
+      "CREATE KEYSPACE",
+      ifelse(options[:if_not_exists], "IF NOT EXISTS", nil),
+      keyspace,
+      with_cluse,
+    ]
+  end
+
+  def drop_keyspace(options) do
+    keyspace = Keyword.fetch!(options, :keyspace) || raise ":keyspace is nil in repository configuration"
+
+    assemble [
+      "DROP KEYSPACE",
+      ifelse(options[:if_exists], "IF EXISTS", nil),
+      keyspace,
+    ]
+  end
+
   ### Helpers ###
 
   defp values(fields) do
@@ -462,15 +499,23 @@ defmodule Cassandra.Ecto do
   defp expr(true,  _sources, _query), do: "TRUE"
   defp expr(false, _sources, _query), do: "FALSE"
 
+  defp expr(atom, sources, query) when is_atom(atom) do
+    expr(Atom.to_string(atom), sources, query)
+  end
+
   defp expr(value, _sources, _query) when is_bitstring(value) do
-    case Ecto.UUID.cast(value) do
-      {:ok, uuid} -> uuid
-      :error      -> "'#{escape_string(value)}'"
-    end
+    quote_string(value)
   end
 
   defp expr(value, _sources, _query) when is_integer(value) or is_float(value) do
     "#{value}"
+  end
+
+  defp quote_string(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> uuid
+      :error      -> "'#{escape_string(value)}'"
+    end
   end
 
   defp in_arg(terms, sources, query) when is_list(terms) do
