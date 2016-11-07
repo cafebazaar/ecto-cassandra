@@ -1,4 +1,4 @@
-defmodule Cassandra.Ecto do
+defmodule EctoCassandra do
 
   alias Ecto.Query.BooleanExpr
 

@@ -1,4 +1,4 @@
-defmodule Cassandra.Ecto.Query do
+defmodule EctoCassandra.Query do
 
   @types [
     :ascii,
@@ -26,7 +26,7 @@ defmodule Cassandra.Ecto.Query do
   defmacro __using__([]) do
     quote do
       import Ecto.Query
-      import Cassandra.Ecto.Query
+      import EctoCassandra.Query
     end
   end
 

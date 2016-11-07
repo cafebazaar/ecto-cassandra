@@ -1,4 +1,4 @@
-defmodule Cassandra.Ecto.Adapter do
+defmodule EctoCassandra.Adapter do
   require Logger
 
   @behaviour Ecto.Adapter
@@ -8,7 +8,7 @@ defmodule Cassandra.Ecto.Adapter do
   ### Ecto.Adapter.Migration Callbacks ###
 
   def execute_ddl(repo, definitions, options) do
-    cql = Cassandra.Ecto.ddl(definitions)
+    cql = EctoCassandra.ddl(definitions)
 
     case repo.execute(cql, options) do
       {:ok, :done} -> :ok
@@ -24,7 +24,7 @@ defmodule Cassandra.Ecto.Adapter do
     cql =
       options
       |> Keyword.put(:if_not_exists, true)
-      |> Cassandra.Ecto.create_keyspace
+      |> EctoCassandra.create_keyspace
 
     case run_query(cql, options) do
       {:ok, %CQL.Result.SchemaChange{change_type: "CREATED", target: "KEYSPACE"}} ->
@@ -40,7 +40,7 @@ defmodule Cassandra.Ecto.Adapter do
     cql =
       options
       |> Keyword.put(:if_exists, true)
-      |> Cassandra.Ecto.drop_keyspace
+      |> EctoCassandra.drop_keyspace
 
     case run_query(cql, options) do
       {:ok, %CQL.Result.SchemaChange{change_type: "DROPPED", target: "KEYSPACE"}} ->
@@ -84,7 +84,7 @@ defmodule Cassandra.Ecto.Adapter do
   end
 
   def execute(repo, %{fields: fields}, {:nocache, {type, query}}, params, process, options) do
-    {cql, values, options} = apply(Cassandra.Ecto, type, [query, options])
+    {cql, values, options} = apply(EctoCassandra, type, [query, options])
     options = Keyword.put(options, :values, values ++ params)
     Logger.debug(cql)
 
@@ -99,7 +99,7 @@ defmodule Cassandra.Ecto.Adapter do
   end
 
   def insert(repo, %{source: {prefix, source}}, fields, on_conflict, [], options) do
-    {cql, values, options} = Cassandra.Ecto.insert(prefix, source, fields, options)
+    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, options)
     exec(repo, cql, values, options, on_conflict)
   end
 
@@ -109,12 +109,12 @@ defmodule Cassandra.Ecto.Adapter do
   end
 
   def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
-    {cql, values, options} = Cassandra.Ecto.update(prefix, source, fields, filters, options)
+    {cql, values, options} = EctoCassandra.update(prefix, source, fields, filters, options)
     exec(repo, cql, values, options)
   end
 
   def delete(repo, %{source: {prefix, source}}, filters, options) do
-    {cql, values, options} = Cassandra.Ecto.delete(prefix, source, filters, options)
+    {cql, values, options} = EctoCassandra.delete(prefix, source, filters, options)
     exec(repo, cql, values, options)
   end
 

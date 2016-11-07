@@ -1,8 +1,8 @@
-defmodule Cassandra.Mixfile do
+defmodule EctoCassandra.Mixfile do
   use Mix.Project
 
   def project, do: [
-    app: :cassandra,
+    app: :ecto_cassandra,
     version: "1.0.0-beta",
     elixir: "~> 1.3",
     build_embedded: Mix.env == :prod,
@@ -14,8 +14,8 @@ defmodule Cassandra.Mixfile do
       "coveralls.post": :test,
       "coveralls.html": :test,
     ],
-    source_url: "https://github.com/cafebazaar.ir/elixir-cassandra",
-    description: "A pure Elixir driver for Apache Cassandra",
+    source_url: "https://github.com/cafebazaar/ecto-cassandra",
+    description: "Cassandra Adapter for Ecto",
     package: package,
     deps: deps,
   ]
@@ -25,11 +25,8 @@ defmodule Cassandra.Mixfile do
   ]
 
   defp deps, do: [
-    {:connection, "~> 1.0"},
-    {:uuid, "~> 1.1"},
     {:ecto, "~> 2.1.0-rc.3"},
-    {:excheck, "~> 0.5", only: :test},
-    {:triq, github: "triqng/triq", only: :test},
+    {:cassandra, github: "cafebazaar/elixir-cassandra"},
     {:excoveralls, "~> 0.5", only: :test},
   ]
 
@@ -37,7 +34,7 @@ defmodule Cassandra.Mixfile do
     licenses: ["Apache 2.0"],
     maintainers: ["Ali Rajabi", "Hassan Zamani"],
     links: %{
-      "Github" => "https://github.com/cafebazaar/elixir-cassandra",
+      "Github" => "https://github.com/cafebazaar/ecto-cassandra",
     },
     files: ~w(mix.exs lib README.md LICENSE.md),
   ]

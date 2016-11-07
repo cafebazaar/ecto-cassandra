@@ -1,7 +1,7 @@
-defmodule EctoAdapterTest do
+defmodule EctoCassandra.AdapterTest do
   use ExUnit.Case, async: true
 
-  use Cassandra.Ecto.Query
+  use EctoCassandra.Query
 
   defmodule User do
     use Ecto.Schema
@@ -308,17 +308,17 @@ defmodule EctoAdapterTest do
   # Schema based
 
   test "insert" do
-    query = Cassandra.Ecto.insert(nil, "users", [name: "John", age: 27], [])
+    query = EctoCassandra.insert(nil, "users", [name: "John", age: 27], [])
     assert query == {"INSERT INTO users (name, age) VALUES (?, ?)",
                     ["John", 27], []}
 
-    query = Cassandra.Ecto.insert("u", "users", [name: "John", age: 27], [])
+    query = EctoCassandra.insert("u", "users", [name: "John", age: 27], [])
     assert query == {"INSERT INTO u.users (name, age) VALUES (?, ?)",
                     ["John", 27], []}
   end
 
   test "update" do
-    query = Cassandra.Ecto.update(
+    query = EctoCassandra.update(
       nil,
       "users",
       [name: "John", age: 27],
@@ -328,7 +328,7 @@ defmodule EctoAdapterTest do
     assert query == {"UPDATE users SET name = ?, age = ? WHERE id = ?",
                     ["John", 27, "54d6e-29bb-11e5-b345-feff819cdc9f"], []}
 
-    query = Cassandra.Ecto.update(
+    query = EctoCassandra.update(
       "u",
       "users",
       [name: "John", age: 27],
@@ -340,11 +340,11 @@ defmodule EctoAdapterTest do
   end
 
   test "delete" do
-    query = Cassandra.Ecto.delete(nil, "users", [name: "John", age: 27], [])
+    query = EctoCassandra.delete(nil, "users", [name: "John", age: 27], [])
     assert query == {"DELETE FROM users WHERE name = ? AND age = ?",
                     ["John", 27], []}
 
-    query = Cassandra.Ecto.delete("u", "users", [name: "John", age: 27], [])
+    query = EctoCassandra.delete("u", "users", [name: "John", age: 27], [])
     assert query == {"DELETE FROM u.users WHERE name = ? AND age = ?",
                     ["John", 27], []}
   end
@@ -475,8 +475,8 @@ defmodule EctoAdapterTest do
   end
 
   defp cql(query, operation \\ :all, options \\ [], counter \\ 0) do
-    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Cassandra.Ecto.Adapter, counter)
-    query = Ecto.Query.Planner.normalize(query, operation, Cassandra.Ecto.Adapter, counter)
-    Cassandra.Ecto.to_cql(query, operation, options)
+    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, EctoCassandra.Adapter, counter)
+    query = Ecto.Query.Planner.normalize(query, operation, EctoCassandra.Adapter, counter)
+    EctoCassandra.to_cql(query, operation, options)
   end
 end

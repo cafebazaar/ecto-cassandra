@@ -1,4 +1,4 @@
-defmodule EctoStorageTest do
+defmodule EctoCassandra.StorageTest do
   use ExUnit.Case, async: true
 
   setup do
@@ -14,14 +14,14 @@ defmodule EctoStorageTest do
   end
 
   test "create keyspace", %{options: options} do
-    assert Cassandra.Ecto.create_keyspace(options) == join """
+    assert EctoCassandra.create_keyspace(options) == join """
         CREATE KEYSPACE test
           WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
       """
   end
 
   test "drop keyspace", %{options: options} do
-    assert Cassandra.Ecto.drop_keyspace(options) == "DROP KEYSPACE test"
+    assert EctoCassandra.drop_keyspace(options) == "DROP KEYSPACE test"
   end
 
   defp join(str) do

@@ -1,4 +1,4 @@
-defmodule EctoMigrationTest do
+defmodule EctoCassandra.MigrationTest do
   use ExUnit.Case, async: true
 
   import Ecto.Migration
@@ -314,6 +314,6 @@ defmodule EctoMigrationTest do
   end
 
   defp cql(definitions) do
-    Cassandra.Ecto.ddl(definitions)
+    EctoCassandra.ddl(definitions)
   end
 end
