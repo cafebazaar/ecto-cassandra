@@ -104,9 +104,12 @@ defmodule EctoCassandra.Adapter do
     exec(repo, cql, values, options, on_conflict)
   end
 
-  def insert_all(_repo, %{source: {_prefix, _source}}, _header, _list, _on_conflict, [], _options) do
-    # TODO: use batch to pack inserts
-    raise "Not implemented"
+  def insert_all(repo, %{source: {prefix, source}, schema: schema}, header, list, on_conflict, [], options) do
+    autogenerate = {auto_column, _} = schema.__schema__(:autogenerate_id)
+    header = header -- [auto_column]
+    fields = Enum.zip(header, Stream.cycle([nil]))
+    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], options)
+    exec(repo, {cql, list}, values, options, on_conflict)
   end
 
   def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
