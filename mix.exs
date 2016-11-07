@@ -13,6 +13,7 @@ defmodule EctoCassandra.Mixfile do
       "coveralls.detail": :test,
       "coveralls.post": :test,
       "coveralls.html": :test,
+      "coveralls.travis": :test,
     ],
     source_url: "https://github.com/cafebazaar/ecto-cassandra",
     description: "Cassandra Adapter for Ecto",
