@@ -98,8 +98,9 @@ defmodule EctoCassandra.Adapter do
     end
   end
 
-  def insert(repo, %{source: {prefix, source}}, fields, on_conflict, [], options) do
-    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, options)
+  def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
+    autogenerate = Enum.map(autogenerate, &{&1, schema.__schema__(:type, &1)})
+    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, options)
     exec(repo, cql, values, options, on_conflict)
   end
 
@@ -118,8 +119,8 @@ defmodule EctoCassandra.Adapter do
     exec(repo, cql, values, options)
   end
 
-  def autogenerate(:id), do: %Cassandra.UUID{type: :uuid}
-  def autogenerate(:binary_id), do: %Cassandra.UUID{type: :timeuuid}
+  def autogenerate(:id), do: nil
+  def autogenerate(:binary_id), do: nil
 
   def dumpers(:binary_id, type), do: [type]
   def dumpers(_primitive, type), do: [type]
@@ -149,7 +150,7 @@ defmodule EctoCassandra.Adapter do
   end
 
   defp exec(repo, cql, values, options, on_conflict \\ :error) do
-    Logger.debug("Executing `#{cql}` with values: #{inspect values}")
+    Logger.debug("Executing `#{inspect cql}` with values: #{inspect values}")
     case repo.execute(cql, Keyword.put(options, :values, values)) do
       {:ok, :done} ->
         {:ok, []}

@@ -305,16 +305,18 @@ defmodule EctoCassandra.AdapterTest do
     assert cql(query, :delete_all, if: :exists) == ~s{DELETE FROM users WHERE id = '54d6e-29bb-11e5-b345-feff819cdc9f' IF EXISTS}
   end
 
-  # Schema based
-
   test "insert" do
-    query = EctoCassandra.insert(nil, "users", [name: "John", age: 27], [])
-    assert query == {"INSERT INTO users (name, age) VALUES (?, ?)",
+    query = EctoCassandra.insert(nil, "users", [name: "John", age: 27], [id: :binary_id], [])
+    assert query == {"INSERT INTO users (id, name, age) VALUES (now(), ?, ?)",
                     ["John", 27], []}
 
-    query = EctoCassandra.insert("u", "users", [name: "John", age: 27], [])
-    assert query == {"INSERT INTO u.users (name, age) VALUES (?, ?)",
-                    ["John", 27], []}
+    query = EctoCassandra.insert("prefix", "users", [name: "Jack", age: 28], [id: :id], [])
+    assert query == {"INSERT INTO prefix.users (id, name, age) VALUES (uuid(), ?, ?)",
+                    ["Jack", 28], []}
+
+    query = EctoCassandra.insert("prefix", "users", [id: :now, name: "Jack", age: 28, inserted_at: :now], [], [])
+    assert query == {"INSERT INTO prefix.users (id, name, age, inserted_at) VALUES (now(), ?, ?, now())",
+                    ["Jack", 28], []}
   end
 
   test "update" do

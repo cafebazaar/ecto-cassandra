@@ -95,11 +95,12 @@ defmodule EctoCassandra do
     end
   end
 
-  def insert(prefix, source, fields, options) do
+  def insert(prefix, source, fields, autogenerate, options) do
+    autogenerate = Enum.map(autogenerate, fn {name, type} -> {name, column_type(type)} end)
     {query, values} = assemble_values([
       "INSERT INTO",
       table_name(prefix, source),
-      values(fields),
+      values(autogenerate, fields),
       ifelse(options[:if] == :not_exists, "IF NOT EXISTS", nil),
       using(options[:ttl], options[:timestamp]),
     ])
@@ -205,7 +206,7 @@ defmodule EctoCassandra do
     replication =
       options
       |> Keyword.get(:replication, [])
-      |> Enum.map_join(", ", fn {key, value} -> "#{expr(key, nil, nil)}: #{expr(value, nil, nil)}" end)
+      |> Enum.map_join(", ", fn {key, value} -> "#{quote_string(key)}: #{expr(value, nil, nil)}" end)
 
     if replication == "" do
       raise ":replication is nil in repository configuration"
@@ -238,36 +239,32 @@ defmodule EctoCassandra do
 
   ### Helpers ###
 
-  defp values(fields) do
-    {funcs, fields} = Enum.partition fields, fn
-      {_, val} -> match?(%Cassandra.UUID{value: nil}, val)
-    end
-    {field_names, field_values} = Enum.unzip(fields)
-    {func_names, func_values}   = Enum.unzip(funcs)
+  defp values(autogenerate, fields) do
+    {auto_names, auto_values} =
+      autogenerate
+      |> Enum.map(fn {name, type} -> {name, autogenerate_value(type)} end)
+      |> Enum.unzip
 
-    func_values = Enum.map_join func_values, ", " , fn
-      %Cassandra.UUID{type: :timeuuid, value: nil} -> "now()"
-      %Cassandra.UUID{type: :uuid,     value: nil} -> "uuid()"
-    end
+    {names, values} = Enum.unzip(fields)
+    names = Enum.map_join(auto_names ++ names, ", ", &identifier/1)
+    [marks, values] =
+      (auto_values ++ values)
+      |> Enum.map(&value/1)
+      |> Enum.unzip
+      |> Tuple.to_list
+      |> Enum.map(&compact/1)
 
-    names = Enum.map_join(field_names ++ func_names, ", ", &identifier/1)
-
-    marks = marks(Enum.count(field_names))
-    embeded_values = if func_values == "" do
-      marks
-    else
-      "#{marks}, #{func_values}"
-    end
-
-    {"(#{names}) VALUES (#{embeded_values})", field_values}
+    {"(#{names}) VALUES (#{Enum.join(marks, ", ")})", [values]}
   end
 
-  defp marks(n) do
-    ["?"]
-    |> Stream.cycle
-    |> Enum.take(n)
-    |> Enum.join(", ")
-  end
+  defp autogenerate_value("timeuuid"), do: :now
+  defp autogenerate_value("uuid"), do: :uuid
+
+  defp compact(list), do: Enum.reject(list, &is_nil/1)
+
+  defp value(:now), do: {"now()", nil}
+  defp value(:uuid), do: {"uuid()", nil}
+  defp value(value), do: {"?", value}
 
   defp set(fields) do
     {names, values} = Enum.unzip(fields)
@@ -409,9 +406,7 @@ defmodule EctoCassandra do
   defp table_name(prefix, name), do: table_name(prefix) <> "." <> table_name(name)
 
   defp assemble(list) do
-    list
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" ")
+    list |> compact |> Enum.join(" ")
   end
 
   defp assemble_values(list) do
@@ -422,7 +417,7 @@ defmodule EctoCassandra do
           {part, values} -> {part, values}
           part           -> {part, []}
          end)
-      |> Enum.reject(&is_nil/1)
+      |> compact
       |> Enum.unzip
 
     {Enum.join(parts, " "), List.flatten(values)}
@@ -499,16 +494,16 @@ defmodule EctoCassandra do
   defp expr(true,  _sources, _query), do: "TRUE"
   defp expr(false, _sources, _query), do: "FALSE"
 
-  defp expr(atom, sources, query) when is_atom(atom) do
-    expr(Atom.to_string(atom), sources, query)
-  end
-
   defp expr(value, _sources, _query) when is_bitstring(value) do
     quote_string(value)
   end
 
   defp expr(value, _sources, _query) when is_integer(value) or is_float(value) do
     "#{value}"
+  end
+
+  defp quote_string(value) when is_atom(value) do
+    value |> Atom.to_string |> quote_string
   end
 
   defp quote_string(value) do
