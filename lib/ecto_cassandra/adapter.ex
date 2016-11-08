@@ -16,7 +16,7 @@ defmodule EctoCassandra.Adapter do
         Logger.debug(inspect result)
         :ok
       {:error, {code, message}} ->
-        Logger.error("[#{code}] #{message}")
+        Logger.debug("ERROR [#{code}] #{message}")
         raise RuntimeError, message: message
     end
   end
@@ -98,8 +98,9 @@ defmodule EctoCassandra.Adapter do
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
         :ok
-      error ->
-        throw error
+      {:error, {code, message}} ->
+        Logger.debug("ERROR [#{code}] #{message}")
+        raise RuntimeError, message: message
     end
   end
 
@@ -170,8 +171,9 @@ defmodule EctoCassandra.Adapter do
         else
           {:error, :stale}
         end
-      error ->
-        throw error
+      {code, message} ->
+        Logger.debug("ERROR [#{code}] #{message}")
+        raise RuntimeError, message: message
     end
   end
 
