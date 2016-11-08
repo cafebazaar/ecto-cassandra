@@ -1,4 +1,4 @@
-%{"cassandra": {:git, "https://github.com/cafebazaar/elixir-cassandra.git", "d9b14a859ca6553a5e528f82b33102eecc037f7a", []},
+%{"cassandra": {:git, "https://github.com/cafebazaar/elixir-cassandra.git", "e68a7bd757f66e97abccbe0ae2fd34c7806c6bb1", []},
   "certifi": {:hex, :certifi, "0.7.0", "861a57f3808f7eb0c2d1802afeaae0fa5de813b0df0979153cbafcd853ababaf", [], []},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [], []},
   "decimal": {:hex, :decimal, "1.2.0", "462960fd71af282e570f7b477f6be56bf8968e68277d4d0b641a635269bf4b0d", [], []},

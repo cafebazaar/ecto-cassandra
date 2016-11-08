@@ -196,18 +196,3 @@ defmodule EctoCassandra.Adapter do
     {:ok, datetime}
   end
 end
-
-defmodule Repo do
-  use Ecto.Repo, otp_app: :cassandra
-end
-
-defmodule User do
-  use Ecto.Schema
-
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
-  schema "users" do
-    field :name, :string
-    field :age,  :integer
-  end
-end
