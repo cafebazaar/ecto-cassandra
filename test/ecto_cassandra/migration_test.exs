@@ -18,7 +18,7 @@ defmodule EctoCassandra.MigrationTest do
       CREATE TABLE posts (id uuid,
         name text,
         price float,
-        on_hand integer,
+        on_hand int,
         published_at timestamp,
         is_active boolean,
         tags LIST<text>,

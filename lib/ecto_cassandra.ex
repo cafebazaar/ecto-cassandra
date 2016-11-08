@@ -620,7 +620,15 @@ defmodule EctoCassandra do
   end
 
   defp column_type({:map, {ktype, vtype}}) do
-    "MAP<#{column_type(ktype)},#{column_type(vtype)}>"
+    "MAP<#{column_type(ktype)}, #{column_type(vtype)}>"
+  end
+
+  defp column_type({:map, type}) do
+    "MAP<text, #{column_type(type)}>"
+  end
+
+  defp column_type(:map) do
+    "MAP<text, text>"
   end
 
   defp column_type({:array, type}) do
@@ -633,6 +641,7 @@ defmodule EctoCassandra do
 
   defp column_type(:id),             do: "uuid"
   defp column_type(:binary_id),      do: "timeuuid"
+  defp column_type(:integer),        do: "int"
   defp column_type(:string),         do: "text"
   defp column_type(:binary),         do: "blob"
   defp column_type(:utc_datetime),   do: "timestamp"
