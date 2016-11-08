@@ -132,9 +132,11 @@ defmodule EctoCassandra.Adapter do
   def autogenerate(:binary_id), do: nil
 
   def dumpers(:binary_id, type), do: [type]
+  def dumpers(:naive_datetime, _type), do: [&is_naive/1]
   def dumpers(_primitive, type), do: [type]
 
   def loaders(:binary_id, type), do: [&load_uuid/1, type]
+  def loaders(:naive_datetime, _type), do: [&is_naive/1]
   def loaders(_primitive, type), do: [type]
 
   def transaction(_repo, _options, _func) do
@@ -189,6 +191,10 @@ defmodule EctoCassandra.Adapter do
 
   defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
   defp load_uuid(value), do: {:ok, value}
+
+  defp is_naive(%NaiveDateTime{} = datetime) do
+    {:ok, datetime}
+  end
 end
 
 defmodule Repo do
