@@ -9,10 +9,15 @@ defmodule EctoCassandra.Adapter do
 
   def execute_ddl(repo, definitions, options) do
     cql = EctoCassandra.ddl(definitions)
-
+    options = Keyword.put_new(options, :consistency, :all)
+    Logger.debug(cql)
     case repo.execute(cql, options) do
-      {:ok, :done} -> :ok
-      error        -> throw error
+      {:ok, result} ->
+        Logger.debug(inspect result)
+        :ok
+      {:error, {code, message}} ->
+        Logger.error("[#{code}] #{message}")
+        raise RuntimeError, message: message
     end
   end
 
