@@ -594,7 +594,7 @@ defmodule EctoCassandra do
   end
 
   defp partition_key?({_, _, _, options}) do
-    Keyword.has_key?(options, :partition_key)
+    Keyword.has_key?(options, :partition_key) or Keyword.has_key?(options, :primary_key)
   end
 
   defp clustering_column?({_, _, _, options}) do
