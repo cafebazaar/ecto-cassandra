@@ -128,10 +128,8 @@ defmodule EctoCassandra.Adapter do
     exec(repo, cql, values, options)
   end
 
-  def autogenerate(:id), do: nil
-  def autogenerate(:binary_id), do: nil
+  def autogenerate(_), do: nil
 
-  def dumpers(:binary_id, type), do: [type]
   def dumpers(:naive_datetime, _type), do: [&is_naive/1]
   def dumpers(_primitive, type), do: [type]
 
