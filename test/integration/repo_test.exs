@@ -68,4 +68,11 @@ defmodule EctoCassandra.Integration.RepoTest do
     assert catch_error(TestRepo.update(changeset, prefix: "oops"))
     assert catch_error(TestRepo.delete(changeset, prefix: "oops"))
   end
+
+  test "map" do
+    meta = %{"example" => "1", "test" => "2"}
+    post = %Post{title: "test map", meta: meta}
+    assert %Post{} = TestRepo.insert!(post)
+    assert [%Post{meta: ^meta}] = TestRepo.all(Post)
+  end
 end
