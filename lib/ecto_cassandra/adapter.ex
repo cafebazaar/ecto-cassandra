@@ -1,4 +1,6 @@
 defmodule EctoCassandra.Adapter do
+  use EctoCassandra.Adapter.Base
+
   require Logger
 
   @behaviour Ecto.Adapter
@@ -84,16 +86,10 @@ defmodule EctoCassandra.Adapter do
     {:ok, []}
   end
 
-  def prepare(type, query) do
-    {:nocache, {type, query}}
-  end
-
-  def execute(repo, %{fields: fields}, {:nocache, {type, query}}, params, process, options) do
-    {cql, values, options} = apply(EctoCassandra, type, [query, options])
-    options = Keyword.put(options, :values, values ++ params)
+  def execute(repo, %{fields: fields} = meta, query, params, process, options) do
+    [cql | _] = args = super(repo, meta, query, params, process, options)
     Logger.debug(cql)
-
-    case repo.execute(cql, options) do
+    case apply(&repo.execute/2, args) do
       {:ok, %{rows_count: count, rows: rows}} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
@@ -104,46 +100,25 @@ defmodule EctoCassandra.Adapter do
     end
   end
 
-  def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
-    autogenerate = Enum.map(autogenerate, &{&1, schema.__schema__(:type, &1)})
-    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, options)
-    exec(repo, cql, values, options, on_conflict)
+  def insert(repo, meta, fields, on_conflict, autogenerate, options) do
+    args = super(repo, meta, fields, on_conflict, autogenerate, options)
+    apply(&exec/5, args)
   end
 
-  def insert_all(repo, %{source: {prefix, source}, schema: schema}, header, list, on_conflict, [], options) do
-    autogenerate = {auto_column, _} = schema.__schema__(:autogenerate_id)
-    header = header -- [auto_column]
-    fields = Enum.zip(header, Stream.cycle([nil]))
-    {cql, values, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], options)
-    exec(repo, {cql, list}, values, options, on_conflict)
+  def insert_all(repo, meta, header, list, on_conflict, returning, options) do
+    args = super(repo, meta, header, list, on_conflict, returning, options)
+    apply(&exec/5, args)
   end
 
-  def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
-    {cql, values, options} = EctoCassandra.update(prefix, source, fields, filters, options)
-    exec(repo, cql, values, options)
+  def update(repo, meta, fields, filters, returning, options) do
+    args = super(repo, meta, fields, filters, returning, options)
+    apply(&exec/4, args)
   end
 
-  def delete(repo, %{source: {prefix, source}}, filters, options) do
-    {cql, values, options} = EctoCassandra.delete(prefix, source, filters, options)
-    exec(repo, cql, values, options)
+  def delete(repo, meta, filters, options) do
+    args = super(repo, meta, filters, options)
+    apply(&exec/4, args)
   end
-
-  def autogenerate(_), do: nil
-
-  def dumpers(:naive_datetime, _type), do: [&is_naive/1]
-  def dumpers(_primitive, type), do: [type]
-
-  def loaders(:binary_id, type), do: [&load_uuid/1, type]
-  def loaders(:naive_datetime, _type), do: [&is_naive/1]
-  def loaders(_primitive, type), do: [type]
-
-  def transaction(_repo, _options, _func) do
-    {:error, :not_supported}
-  end
-
-  def in_transaction?(_repo), do: false
-
-  def rollback(_repo, _value), do: nil
 
   ### Helpers ###
 
@@ -176,21 +151,19 @@ defmodule EctoCassandra.Adapter do
         raise RuntimeError, message: message
     end
   end
+end
 
-  defp process_row(row, [{{:., _, _}, _, _} | _] = fields, process) do
-    fields
-    |> Enum.zip(row)
-    |> Enum.map(fn {field, term} -> process.(field, term, nil) end)
-  end
+defmodule Repo do
+  use Ecto.Repo, otp_app: :cassandra
+end
 
-  defp process_row(row, fields, process) do
-    Enum.map(fields, &process.(&1, row, nil))
-  end
+defmodule User do
+  use Ecto.Schema
 
-  defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
-  defp load_uuid(value), do: {:ok, value}
-
-  defp is_naive(%NaiveDateTime{} = datetime) do
-    {:ok, datetime}
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+  schema "users" do
+    field :name, :string
+    field :age,  :integer
   end
 end

@@ -237,6 +237,22 @@ defmodule EctoCassandra do
     ]
   end
 
+  def batch(queries, options) do
+    {query, values} = assemble_values [
+      "BEGIN",
+      ifelse(options[:type] == :unlogged, "UNLOGGED", nil),
+      ifelse(options[:type] == :counter, "COUNTER", nil),
+      "BATCH",
+      using(options[:ttl], options[:timestamp]),
+      Enum.join(queries, "; "),
+      "APPLY BATCH",
+    ]
+
+    options = Keyword.drop(options, [:ttl, :timestamp])
+
+    {query, values, options}
+  end
+
   ### Helpers ###
 
   defp values(autogenerate, fields) do
