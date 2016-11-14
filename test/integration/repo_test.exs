@@ -75,4 +75,11 @@ defmodule EctoCassandra.Integration.RepoTest do
     assert %Post{} = TestRepo.insert!(post)
     assert [%Post{meta: ^meta}] = TestRepo.all(Post)
   end
+
+  test "inet" do
+    ip = {127, 0, 0, 1}
+    post = %Post{title: "test inet", ip: ip}
+    assert %Post{} = TestRepo.insert!(post)
+    assert [%Post{ip: ^ip}] = TestRepo.all(Post)
+  end
 end

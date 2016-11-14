@@ -29,6 +29,7 @@ defmodule EctoCassandra.Integration.Post do
     field :meta, :map
     field :links, {:map, :string}
     field :posted, :date
+    field :ip, EctoCassandra.INet
     timestamps
   end
 

@@ -23,6 +23,7 @@ defmodule EctoCassandra.Integration.Migration do
       add :intensity, :float
       add :author_id, :integer
       add :posted, :date
+      add :ip, :inet
       timestamps
     end
   end
