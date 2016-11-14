@@ -46,8 +46,13 @@ defmodule EctoCassandra.Adapter.Base do
       def loaders(:naive_datetime, _type), do: [&is_naive/1]
       def loaders(_primitive, type), do: [type]
 
-      def transaction(_repo, _options, _func) do
-        {:error, :not_supported}
+      def transaction(_repo, _options, func) do
+        case func.() do
+          {:error, _} = error ->
+            error
+          value ->
+            {:ok, value}
+        end
       end
 
       def in_transaction?(_repo), do: false
