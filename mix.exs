@@ -3,7 +3,7 @@ defmodule EctoCassandra.Mixfile do
 
   def project, do: [
     app: :ecto_cassandra,
-    version: "1.0.0-beta",
+    version: "1.0.0-beta.1",
     elixir: "~> 1.3",
     build_embedded: Mix.env == :prod,
     start_permanent: Mix.env == :prod,
@@ -27,7 +27,7 @@ defmodule EctoCassandra.Mixfile do
 
   defp deps, do: [
     {:ecto, "~> 2.1.0-rc.3"},
-    {:cassandra, github: "cafebazaar/elixir-cassandra"},
+    {:cassandra, "~> 1.0.0-beta.2"},
     {:excoveralls, "~> 0.5", only: :test},
   ]
 
