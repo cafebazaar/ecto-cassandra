@@ -23,6 +23,22 @@ config :my_app, Sample.Repo,
   ]
 
 # In your application code
+defmodule Sample.Repo.Migrations.CreateUser do
+  use Ecto.Migration
+
+  def change do
+    create table(:users, primary_key: false) do
+      add :id, :id, partition_key: true
+      add :age, :integer, clustring_column: true
+      add :name, :string
+      add :email, :string
+      add :password_hash, :string
+
+      timestamps
+    end
+  end
+end
+
 defmodule Sample.Repo do
   use Ecto.Repo, otp_app: :my_app
 end
@@ -33,9 +49,34 @@ defmodule Sample.User do
   @primary_key false
   schema "users" do
     field :username, primary_key: true
+    field :age, :integer
     field :name # Defaults to type :string
     field :email
     field :password_hash
+    field :password, :string, virtual: true
+  end
+end
+
+defmodule Sample.App do
+  import Ecto.Query
+  alias Sample.{Repo, User}
+
+  def keyword_query do
+    Repo.all from u in User,
+      where: u.username == "john",
+      select: u.email
+  end
+
+  def pipe_query do
+    User
+    |> where([u], u.age > 10)
+    |> order_by(:age)
+    |> limit(10)
+    |> Repo.all
+  end
+
+  def get_by_name do
+    Repo.get_by(username: "john")
   end
 end
 ```
