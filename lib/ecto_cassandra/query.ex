@@ -92,6 +92,12 @@ defmodule EctoCassandra.Query do
     end
   end
 
+  defmacro contains(field, value) do
+    quote do
+      fragment("? CONTAINS ?", unquote(field), unquote(value))
+    end
+  end
+
   @doc """
   Be aware that batches are often mistakenly used in an attempt to optimize performance.
 
