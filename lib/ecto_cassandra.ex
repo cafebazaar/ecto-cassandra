@@ -60,12 +60,17 @@ defmodule EctoCassandra do
   end
 
   def update_all(%{sources: sources} = query, options) do
+    where = where(query, sources)
+    if is_nil(where) do
+      raise ArgumentError, "Cassandra requires where caluse for update"
+    end
+
     {query, values} = assemble_values([
       "UPDATE",
       table_name(query),
       using(options[:ttl], options[:timestamp]),
       update_fields(query, sources),
-      where(query, sources),
+      where,
       only_when(options[:if] == :exists, "IF EXISTS"),
     ])
 
