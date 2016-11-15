@@ -1,22 +1,26 @@
-defmodule EctoCassandra.Integration.Schema do
-  defmacro __using__(_) do
-    quote do
-      use Ecto.Schema
+defmodule EctoCassandra.Integration.User do
+  use Ecto.Schema
+  import Ecto.Changeset
 
-      # @primary_key {:id, :binary_id, autogenerate: true}
-      @primary_key false
-      @foreign_key_type :binary_id
-      @timestamps_opts [usec: true]
-    end
+  @timestamps_opts [usec: true]
+  @foreign_key_type :uuid
+  @primary_key {:id, :id, autogenerate: true}
+  schema "users" do
+    field :name
+    field :hobbes, {:array, :string}
+    has_many :posts, EctoCassandra.Integration.Post, foreign_key: :author_id
+    timestamps type: :utc_datetime
   end
 end
 
 defmodule EctoCassandra.Integration.Post do
-  use EctoCassandra.Integration.Schema
+  use Ecto.Schema
   import Ecto.Changeset
 
+  @timestamps_opts [usec: true]
+  @foreign_key_type :id
+  @primary_key {:title, :string, autogenerate: false}
   schema "posts" do
-    field :title, :string, primary_key: true
     field :counter, :integer
     field :text, :binary
     field :temp, :string, default: "temp", virtual: true
@@ -24,12 +28,13 @@ defmodule EctoCassandra.Integration.Post do
     field :cost, :decimal
     field :visits, :integer
     field :intensity, :float
-    field :bid, :binary_id
-    field :uuid, :string
+    field :uuid, :binary_id
+    field :timeuuid, :binary_id
     field :meta, :map
     field :links, {:map, :string}
     field :posted, :date
     field :ip, EctoCassandra.INet
+    belongs_to :author, EctoCassandra.Integration.User
     timestamps
   end
 

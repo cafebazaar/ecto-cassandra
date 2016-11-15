@@ -657,6 +657,8 @@ defmodule EctoCassandra do
 
   defp column_type(:id),             do: "uuid"
   defp column_type(:binary_id),      do: "timeuuid"
+  defp column_type(:uuid),           do: "uuid"
+  defp column_type(:timeuuid),       do: "timeuuid"
   defp column_type(:integer),        do: "int"
   defp column_type(:string),         do: "text"
   defp column_type(:binary),         do: "blob"

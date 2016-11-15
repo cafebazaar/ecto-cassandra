@@ -3,9 +3,9 @@ defmodule EctoCassandra.Integration.Migration do
 
   def change do
     create table(:users, comment: "users table", primary_key: false) do
-      add :id, :id, partition_key: true
+      add :id, :uuid, partition_key: true
       add :name, :text
-
+      add :hobbes, {:array, :string}
       timestamps
     end
 
@@ -13,8 +13,8 @@ defmodule EctoCassandra.Integration.Migration do
       add :title, :text, partition_key: true
       add :counter, :integer
       add :text, :binary
-      add :bid, :binary_id
       add :uuid, :uuid
+      add :timeuuid, :timeuuid
       add :meta, :map
       add :links, {:map, :string}
       add :public, :boolean
