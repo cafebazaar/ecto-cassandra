@@ -61,14 +61,14 @@ defmodule EctoCassandra.Adapter.Base do
 
       def rollback(_repo, _value), do: nil
 
-      defp process_row(row, [{{:., _, _}, _, _} | _] = fields, process) do
-        fields
-        |> Enum.zip(row)
-        |> Enum.map(fn {field, term} -> process.(field, term, nil) end)
+      defp process_row(row, [{:&, _, _} | _] = fields, process) do
+        Enum.map(fields, &process.(&1, row, nil))
       end
 
       defp process_row(row, fields, process) do
-        Enum.map(fields, &process.(&1, row, nil))
+        fields
+        |> Enum.zip(row)
+        |> Enum.map(fn {field, term} -> process.(field, term, nil) end)
       end
 
       defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
