@@ -482,8 +482,8 @@ defmodule EctoCassandra do
     join_values [expr(left, sources, query), " IN (", items, ")"]
   end
 
-  defp expr({:in, _, [_, {:^, _, _}]}, _sources, query) do
-    support_error!(query, "NOT IN relation")
+  defp expr({:in, _, [left, right]}, sources, query) do
+    assemble_values [expr(left, sources, query), "IN", expr(right, sources, query)]
   end
 
   defp expr({:is_nil, _, _}, _sources, query) do

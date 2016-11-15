@@ -464,16 +464,6 @@ defmodule EctoCassandra.AdapterTest do
       end
     end
 
-    test "not in" do
-      query =
-        User
-        |> where([u], u.age in ^[])
-        |> select([u], u.id)
-      assert_raise Ecto.QueryError, ~r/Cassandra does not support NOT IN relation/, fn ->
-        cql(query)
-      end
-    end
-
     test "is nil" do
       query =
         User
