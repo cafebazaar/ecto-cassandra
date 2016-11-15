@@ -24,8 +24,7 @@ defmodule EctoCassandra.Adapter do
       {:ok, result} ->
         Logger.debug(inspect result)
         :ok
-      {:error, {code, message}} ->
-        log_error(code, message)
+      {:error, {_, message}} ->
         raise RuntimeError, message: message
     end
   end
@@ -108,8 +107,9 @@ defmodule EctoCassandra.Adapter do
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
         :ok
-      {:error, {code, message}} ->
-        log_error(code, message)
+      {:error, reason} ->
+        raise RuntimeError, message: reason
+      {_, message} ->
         raise RuntimeError, message: message
     end
   end
@@ -165,14 +165,15 @@ defmodule EctoCassandra.Adapter do
         else
           {:error, :stale}
         end
-      {:error, {code, message}} ->
-        log_error(code, message)
+      {:error, reason} ->
+        raise RuntimeError, message: reason
+      {_, message} ->
         raise RuntimeError, message: message
     end
   end
 
-  defp log_error(code, message) do
-    Logger.error("[#{code}] #{message}")
+  defp log_query({cql, values}, options) do
+    Logger.debug("Executing:\n\n  #{cql}\n  #{inspect options}\n  #{inspect values}")
   end
 
   defp log_query(cql, options) do
