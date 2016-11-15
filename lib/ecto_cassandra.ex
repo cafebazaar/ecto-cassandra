@@ -271,7 +271,7 @@ defmodule EctoCassandra do
       |> Tuple.to_list
       |> Enum.map(&compact/1)
 
-    {"(#{names}) VALUES (#{Enum.join(marks, ", ")})", [values]}
+    {"(#{names}) VALUES (#{Enum.join(marks, ", ")})", values}
   end
 
   defp autogenerate_value("timeuuid"), do: :now
@@ -449,7 +449,7 @@ defmodule EctoCassandra do
       |> compact
       |> Enum.unzip
 
-    {Enum.join(parts, joiner), List.flatten(values)}
+    {Enum.join(parts, joiner), Enum.concat(values)}
   end
 
   Enum.map @binary_operators_map, fn {op, term} ->
