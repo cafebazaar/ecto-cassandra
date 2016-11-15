@@ -17,7 +17,7 @@ defmodule EctoCassandra.MigrationTest do
     assert cql(create) == join """
       CREATE TABLE posts (id uuid,
         name text,
-        price float,
+        price double,
         on_hand int,
         published_at timestamp,
         is_active boolean,

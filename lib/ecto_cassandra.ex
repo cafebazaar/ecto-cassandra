@@ -664,6 +664,7 @@ defmodule EctoCassandra do
   defp column_type(:binary),         do: "blob"
   defp column_type(:utc_datetime),   do: "timestamp"
   defp column_type(:naive_datetime), do: "timestamp"
+  defp column_type(:float),          do: "double"
   defp column_type(other),           do: Atom.to_string(other)
 
   defp column_options(options) do
