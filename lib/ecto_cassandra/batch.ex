@@ -57,7 +57,7 @@ defmodule EctoCassandra.Batch do
     {queries, values} = get_queries(agent)
     {cql, cql_values, options} = EctoCassandra.batch(queries, options)
     values = cql_values ++ values
-    Logger.debug("Executing `#{cql}`\n with values: #{inspect values}")
+    Logger.debug("Executing:\n\n  #{cql}\n  #{inspect options}")
     exec(repo, cql, Keyword.put(options, :values, values))
   end
 
