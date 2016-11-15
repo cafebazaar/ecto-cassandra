@@ -39,11 +39,13 @@ defmodule EctoCassandra.Adapter.Base do
 
       def autogenerate(_), do: nil
 
-      def dumpers(:naive_datetime, _type), do: [&is_naive/1]
+      def dumpers(:utc_datetime, _type), do: [&to_naive/1]
+      def dumpers(:naive_datetime, _type), do: [&to_naive/1]
       def dumpers(_primitive, type), do: [type]
 
       def loaders(:binary_id, type), do: [&load_uuid/1, type]
-      def loaders(:naive_datetime, _type), do: [&is_naive/1]
+      def loaders(:utc_datetime, _type), do: [&to_datetime/1]
+      def loaders(:naive_datetime, _type), do: [&to_naive/1]
       def loaders(_primitive, type), do: [type]
 
       def transaction(_repo, _options, func) do
@@ -72,9 +74,20 @@ defmodule EctoCassandra.Adapter.Base do
       defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
       defp load_uuid(value), do: {:ok, value}
 
-      defp is_naive(%NaiveDateTime{} = datetime) do
-        {:ok, datetime}
+      defp to_naive(%NaiveDateTime{} = datetime), do: {:ok, datetime}
+      defp to_naive(%DateTime{} = datetime), do: {:ok, DateTime.to_naive(datetime)}
+      defp to_naive(_), do: :error
+
+      defp to_datetime(%NaiveDateTime{} = naive) do
+        values =
+          naive
+          |> Map.from_struct
+          |> Map.merge(%{std_offset: 0, time_zone: "Etc/UTC", utc_offset: 0, zone_abbr: "UTC"})
+
+        {:ok, struct(DateTime, values)}
       end
+      defp to_datetime(%DateTime{} = datetime), do: {:ok, datetime}
+      defp to_datetime(_), do: :error
 
       defoverridable [
         autogenerate: 1,
