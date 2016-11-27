@@ -13,13 +13,12 @@ defmodule EctoCassandra.Integration.TypesTest do
   test "primitive types" do
     integer  = 1
     float    = 0.1
-    text     = <<0,1>>
     title    = "types test"
     uuid     = "00010203-0405-0607-0809-0a0b0c0d0e0f"
     boolean  = true
     datetime = ~N[2014-01-16 20:26:51.000]
 
-    TestRepo.insert!(%Post{title: title, text: text, public: boolean, visits: integer, uuid: uuid,
+    TestRepo.insert!(%Post{title: title, public: boolean, visits: integer, uuid: uuid,
                            counter: integer, inserted_at: datetime, intensity: float})
 
     # nil
@@ -39,10 +38,6 @@ defmodule EctoCassandra.Integration.TypesTest do
     # Booleans
     assert [true] = TestRepo.all(from p in Post, where: p.public == ^boolean, select: p.public, lock: "ALLOW FILTERING")
     assert [true] = TestRepo.all(from p in Post, where: p.public == true, select: p.public, lock: "ALLOW FILTERING")
-
-    # Binaries
-    assert [^text] = TestRepo.all(from p in Post, where: p.text == <<0, 1>>, select: p.text, lock: "ALLOW FILTERING")
-    assert [^text] = TestRepo.all(from p in Post, where: p.text == ^text, select: p.text, lock: "ALLOW FILTERING")
 
     # UUID
     assert [^uuid] = TestRepo.all(from p in Post, where: p.uuid == ^uuid, select: p.uuid, lock: "ALLOW FILTERING")

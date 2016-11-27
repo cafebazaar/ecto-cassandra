@@ -46,7 +46,7 @@ defmodule EctoCassandra.Integration.RepoTest do
   end
 
   test "insert, update and delete" do
-    post = %Post{title: "insert, update, delete", text: "fetch empty"}
+    post = %Post{title: "insert, update, delete"}
     meta = post.__meta__
 
     deleted_meta = put_in meta.state, :deleted

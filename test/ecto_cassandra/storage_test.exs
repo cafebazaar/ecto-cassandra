@@ -16,7 +16,7 @@ defmodule EctoCassandra.StorageTest do
   test "create keyspace", %{options: options} do
     assert EctoCassandra.create_keyspace(options) == join """
         CREATE KEYSPACE test
-          WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+          WITH replication = {'class' : 'SimpleStrategy', 'replication_factor' : 1}
       """
   end
 

@@ -100,7 +100,7 @@ defmodule EctoCassandra.Adapter do
 
   @doc false
   def execute(repo, %{fields: fields} = meta, query, params, process, options) do
-    [cql, options | _] = args = super(repo, meta, query, params, process, options)
+    [cql, options] = args = super(repo, meta, query, params, process, options)
     log_query(cql, options)
     case apply(&repo.execute/2, args) do
       {:ok, %{rows_count: count, rows: rows}} ->
@@ -117,25 +117,25 @@ defmodule EctoCassandra.Adapter do
   @doc false
   def insert(repo, meta, fields, on_conflict, autogenerate, options) do
     args = super(repo, meta, fields, on_conflict, autogenerate, options)
-    apply(&exec/5, args)
+    apply(&exec/4, args)
   end
 
   @doc false
   def insert_all(repo, meta, header, list, on_conflict, returning, options) do
     args = super(repo, meta, header, list, on_conflict, returning, options)
-    apply(&exec/5, args)
+    apply(&exec/4, args)
   end
 
   @doc false
   def update(repo, meta, fields, filters, returning, options) do
     args = super(repo, meta, fields, filters, returning, options)
-    apply(&exec/4, args)
+    apply(&exec/3, args)
   end
 
   @doc false
   def delete(repo, meta, filters, options) do
     args = super(repo, meta, filters, options)
-    apply(&exec/4, args)
+    apply(&exec/3, args)
   end
 
   ### Helpers ###
@@ -151,8 +151,7 @@ defmodule EctoCassandra.Adapter do
     result
   end
 
-  defp exec(repo, cql, values, options, on_conflict \\ :error) do
-    options = Keyword.put(options, :values, values)
+  defp exec(repo, cql, options, on_conflict \\ :error) do
     log_query(cql, options)
     case repo.execute(cql, options) do
       {:ok, :done} ->
@@ -170,10 +169,6 @@ defmodule EctoCassandra.Adapter do
       {_, message} ->
         raise RuntimeError, message: message
     end
-  end
-
-  defp log_query({cql, values}, options) do
-    Logger.debug("Executing:\n\n  #{cql}\n  #{inspect options}\n  #{inspect values}")
   end
 
   defp log_query(cql, options) do

@@ -4,37 +4,49 @@ defmodule EctoCassandra.Adapter.Base do
   defmacro __using__(_) do
     quote do
       def prepare(type, query) do
-        {:nocache, {type, query}}
+        {:cache, {System.unique_integer([:positive]), type, query}}
       end
 
-      def execute(repo, %{fields: fields}, {:nocache, {type, query}}, params, process, options) do
-        {cql, values, options} = apply(EctoCassandra, type, [query, options])
-        options = Keyword.put(options, :values, values ++ params)
+      def execute(repo, %{fields: fields}, {:cache, update, {id, type, query}}, params, process, options) do
+        {cql, options} = apply(EctoCassandra, type, [query, options])
+        update.({id, cql})
+        options = Keyword.put(options, :values, params)
+        [cql, options]
+      end
+
+      def execute(repo, _meta, {:cached, _reset, {id, cql}}, params, _process, options) do
+        options = Keyword.put(options, :values, params)
+        [cql, options]
+      end
+
+      def execute(repo, %{fields: fields}, {:nocache, {id, type, query}}, params, process, options) do
+        {cql, options} = apply(EctoCassandra, type, [query, options])
+        options = Keyword.put(options, :values, params)
         [cql, options]
       end
 
       def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
         autogenerate = Enum.map(autogenerate, &{&1, schema.__schema__(:type, &1)})
-        {cql, values, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, options)
-        [repo, cql, values, options, on_conflict]
+        {cql, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, options)
+        [repo, cql, options, on_conflict]
       end
 
       def insert_all(repo, %{source: {prefix, source}, schema: schema}, header, list, on_conflict, [], options) do
         autogenerate = {auto_column, _} = schema.__schema__(:autogenerate_id)
         header = header -- [auto_column]
         fields = Enum.zip(header, Stream.cycle([nil]))
-        {cql, values, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], options)
-        [repo, {cql, list}, values, options, on_conflict]
+        {cql, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], options)
+        [repo, {cql, list}, options, on_conflict]
       end
 
       def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
-        {cql, values, options} = EctoCassandra.update(prefix, source, fields, filters, options)
-        [repo, cql, values, options]
+        {cql, options} = EctoCassandra.update(prefix, source, fields, filters, options)
+        [repo, cql, options]
       end
 
       def delete(repo, %{source: {prefix, source}}, filters, options) do
-        {cql, values, options} = EctoCassandra.delete(prefix, source, filters, options)
-        [repo, cql, values, options]
+        {cql, options} = EctoCassandra.delete(prefix, source, filters, options)
+        [repo, cql, options]
       end
 
       def autogenerate(_), do: nil

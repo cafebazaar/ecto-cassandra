@@ -22,131 +22,129 @@ defmodule EctoCassandra do
   ### API ###
 
   def to_cql(query, operation, options \\ []) do
-    {query, values, _} = apply(__MODULE__, operation, [query, options])
-    {query, values}
+    {cql, _} = apply(__MODULE__, operation, [query, options])
+    cql
   end
 
-  def all(%{sources: sources} = query, options \\ []) do
-    {query, values} = assemble_values([
-      select(query, sources),
-      from(query, sources),
-      where(query, sources),
-      group_by(query, sources),
-      order_by(query, sources),
-      limit(query, sources),
+  def all(query, options \\ []) do
+    query = assemble [
+      select(query),
+      from(query),
+      where(query),
+      group_by(query),
+      order_by(query),
+      limit(query),
       lock(query),
-    ])
+    ]
 
-    {query, values, options}
+    {query, options}
   end
 
-  def delete_all(%{sources: sources} = query, options) do
+  def delete_all(query, options) do
     table = table_name(query)
-    {query, values} = case where(query, sources) do
-      nil ->
-        {"TRUNCATE #{table}", []}
+    query = case where(query) do
+      [] ->
+        "TRUNCATE #{table}"
       where ->
-        assemble_values([
-          {"DELETE FROM #{table}", []},
+        assemble [
+          "DELETE FROM #{table}",
           where,
           only_when(options[:if] == :exists, "IF EXISTS"),
           using(options[:ttl], options[:timestamp]),
-        ])
+        ]
     end
 
     options = Keyword.drop(options, [:if, :ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
-  def update_all(%{sources: sources} = query, options) do
-    where = where(query, sources)
-    if is_nil(where) do
-      raise ArgumentError, "Cassandra requires where caluse for update"
-    end
+  def update_all(query, options) do
+    where = where(query)
+    if is_nil(where), do: raise ArgumentError, "Cassandra requires where caluse for update"
 
-    {query, values} = assemble_values([
+    query = assemble [
       "UPDATE",
       table_name(query),
       using(options[:ttl], options[:timestamp]),
-      update_fields(query, sources),
+      update_fields(query),
       where,
       only_when(options[:if] == :exists, "IF EXISTS"),
-    ])
+    ]
 
     options = Keyword.drop(options, [:if, :ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
-  defp update_fields(%{updates: updates} = query, sources) do
+  defp update_fields(%{updates: updates} = query) do
     fields = for %{expr: expr} <- updates,
-        {op, kw} <- expr,
-        {key, value} <- kw
+      {op, kw} <- expr,
+      {key, value} <- kw
     do
-      update_op(op, key, value, sources, query)
+      update_op(op, key, value, query)
     end
-    assemble_values ["SET", join_values(fields, ", ")]
+    ["SET", Enum.join(fields, ", ")]
   end
 
-  defp update_op(op, key, value, sources, query) do
+  defp update_op(op, key, value, query) do
     field = identifier(key)
-    value = expr(value, sources, query)
+    value = expr(value, query)
     case op do
-      :set  -> assemble_values [field, "=", value]
-      :inc  -> assemble_values [field, "=", field, "+", value]
-      :push -> assemble_values [field, "=", field, "+", "[", value, "]"]
-      :pull -> assemble_values [field, "=", field, "-", "[", value, "]"]
+      :set  -> assemble [field, "=", value]
+      :inc  -> assemble [field, "=", field, "+", value]
+      :push -> assemble [field, "=", field, "+", "[", value, "]"]
+      :pull -> assemble [field, "=", field, "-", "[", value, "]"]
       other -> error!(query, "Unknown update operation #{inspect other} for Cassandra")
     end
   end
 
   def insert(prefix, source, fields, autogenerate, options) do
     autogenerate = Enum.map(autogenerate, fn {name, type} -> {name, column_type(type)} end)
-    {query, values} = assemble_values([
+    query = assemble [
       "INSERT INTO",
       table_name(prefix, source),
       values(autogenerate, fields),
       only_when(options[:if] == :not_exists, "IF NOT EXISTS"),
       using(options[:ttl], options[:timestamp]),
-    ])
+    ]
 
     options = Keyword.drop(options, [:if, :ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
   def update(prefix, source, fields, filters, options) do
     # TODO: support IF conditions
 
-    {query, values} = assemble_values([
+    query = assemble [
       "UPDATE",
       table_name(prefix, source),
       using(options[:ttl], options[:timestamp]),
       set(fields),
       where(filters),
       only_when(options[:if] == :exists, "IF EXISTS"),
-    ])
+    ]
 
     options = Keyword.drop(options, [:if, :ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
   def delete(prefix, source, filters, options) do
     # TODO: support IF conditions
 
-    {query, values} = assemble_values([
+    query = assemble [
       "DELETE FROM",
       table_name(prefix, source),
       using(options[:ttl], options[:timestamp]),
       where(filters),
       only_when(options[:if] == :exists, "IF EXISTS"),
-    ])
+    ]
 
     options = Keyword.drop(options, [:if, :ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
   def ddl({command, %Table{} = table, columns})
@@ -212,7 +210,7 @@ defmodule EctoCassandra do
     replication =
       options
       |> Keyword.get(:replication, [])
-      |> Enum.map_join(", ", fn {key, value} -> "#{quote_string(key)}: #{primitive(value)}" end)
+      |> map
 
     if replication == "" do
       raise ":replication is nil in repository configuration"
@@ -221,8 +219,8 @@ defmodule EctoCassandra do
     durable_writes = Keyword.get(options, :durable_writes)
 
     with_cluse = case durable_writes do
-      nil -> "WITH replication = {#{replication}}"
-      _   -> "WITH replication = {#{replication}} AND durable_writes = #{durable_writes}"
+      nil -> "WITH replication = #{replication}"
+      _   -> "WITH replication = #{replication} AND durable_writes = #{durable_writes}"
     end
 
     assemble [
@@ -244,19 +242,19 @@ defmodule EctoCassandra do
   end
 
   def batch(queries, options) do
-    {query, values} = assemble_values [
+    query = assemble [
       "BEGIN",
       only_when(options[:type] == :unlogged, "UNLOGGED"),
       only_when(options[:type] == :counter, "COUNTER"),
-      "BATCH",
+      "BATCH\n  ",
       using(options[:ttl], options[:timestamp]),
-      Enum.join(queries, "; "),
-      "APPLY BATCH",
+      Enum.join(queries, ";\n  "),
+      "\nAPPLY BATCH",
     ]
 
     options = Keyword.drop(options, [:ttl, :timestamp])
 
-    {query, values, options}
+    {query, options}
   end
 
   ### Helpers ###
@@ -268,125 +266,123 @@ defmodule EctoCassandra do
       |> Enum.unzip
 
     {names, values} = Enum.unzip(fields)
-    names = Enum.map_join(auto_names ++ names, ", ", &identifier/1)
-    [marks, values] =
-      (auto_values ++ values)
-      |> Enum.map(&value/1)
-      |> Enum.unzip
-      |> Tuple.to_list
-      |> Enum.map(&compact/1)
 
-    {"(#{names}) VALUES (#{Enum.join(marks, ", ")})", values}
+    names = Enum.map_join(auto_names ++ names, ", ", &identifier/1)
+    values = Enum.map_join(auto_values ++ values, ", ", &value/1)
+
+    ["(#{names})", "VALUES", "(#{values})"]
   end
 
   defp autogenerate_value("timeuuid"), do: :now
   defp autogenerate_value("uuid"), do: :uuid
 
-  defp compact(list), do: Enum.reject(list, &is_nil/1)
-
-  defp value(:now), do: {"now()", nil}
-  defp value(:uuid), do: {"uuid()", nil}
-  defp value(value), do: {"?", value}
+  defp value(:now),  do: "now()"
+  defp value(:uuid), do: "uuid()"
+  defp value(value), do: primitive(value)
 
   defp set(fields) do
-    {names, values} = Enum.unzip(fields)
-    sets = Enum.map_join(names, ", ", &"#{identifier(&1)} = ?")
-    {"SET #{sets}", values}
+    sets =
+      fields
+      |> Keyword.keys
+      |> Enum.map(&"#{identifier(&1)} = ?")
+      |> Enum.join(", ")
+
+    ["SET", sets]
   end
 
-  defp select(%{select: %{fields: fields}} = query, sources) do
-    assemble_values ["SELECT", select_fields(fields, sources, query)]
+  defp select(%{select: %{fields: fields}} = query) do
+    ["SELECT", select_fields(fields, query)]
   end
 
-  defp from(query, _sources) do
-    assemble_values ["FROM", table_name(query)]
+  defp from(query) do
+    ["FROM", table_name(query)]
   end
 
   defp where(filters) when is_list(filters) do
-    {fields, values} = Enum.unzip(filters)
-    conditions = Enum.map_join(fields, " AND ", &"#{identifier(&1)} = ?")
-    {"WHERE #{conditions}", values}
+    conditions =
+      filters
+      |> Enum.map(fn {key, value} -> [identifier(key), "=", expr(value, nil)] end)
+      |> Enum.intersperse("AND")
+
+    ["WHERE", conditions]
   end
 
-  defp where(%{wheres: []}, _), do: nil
-  defp where(%{wheres: wheres} = query, sources) do
-    assemble_values [
-      "WHERE",
-      boolean(wheres, sources, query),
-    ]
+  defp where(%{wheres: []}), do: []
+  defp where(%{wheres: wheres} = query) do
+    ["WHERE", boolean(wheres, query)]
   end
 
-  defp group_by(%{group_bys: []}, _), do: nil
-  defp group_by(%{group_bys: group_bys} = query, sources) do
+  defp group_by(%{group_bys: []}), do: []
+  defp group_by(%{group_bys: group_bys} = query) do
     group_by_clause =
       group_bys
       |> Enum.flat_map(fn %{expr: expr} -> expr end)
-      |> Enum.map(&expr(&1, sources, query))
-      |> join_values(", ")
+      |> Enum.map(&expr(&1, query))
+      |> Enum.join(", ")
 
-    assemble_values ["GROUP BY", group_by_clause]
+    ["GROUP BY", group_by_clause]
   end
 
-  defp order_by(%{order_bys: []}, _), do: nil
-  defp order_by(%{order_bys: order_bys} = query, sources) do
+  defp order_by(%{order_bys: []}), do: []
+  defp order_by(%{order_bys: order_bys} = query) do
     ordering_clause =
       order_bys
       |> Enum.flat_map(fn %{expr: expr} -> expr end)
-      |> Enum.map(&order_by_expr(&1, sources, query))
-      |> join_values(", ")
+      |> Enum.map(&order_by_expr(&1, query))
+      |> Enum.join(", ")
 
-    assemble_values ["ORDER BY", ordering_clause]
+    ["ORDER BY", ordering_clause]
   end
 
-  defp order_by_expr({dir, expr}, sources, query) do
-    assemble_values [
-      expr(expr, sources, query),
+  defp order_by_expr({dir, expr}, query) do
+    assemble [
+      expr(expr, query),
       only_when(dir == :desc, "DESC"),
     ]
   end
 
-  defp limit(%{limit: nil}, _sources), do: nil
-  defp limit(%{limit: %{expr: expr}} = query, sources) do
-    assemble_values ["LIMIT", expr(expr, sources, query)]
+  defp limit(%{limit: nil}), do: []
+  defp limit(%{limit: %{expr: expr}} = query) do
+    ["LIMIT", expr(expr, query)]
   end
 
-  defp lock(%{lock: nil}), do: nil
-  defp lock(%{lock: "ALLOW FILTERING"}), do: "ALLOW FILTERING"
+  defp lock(%{lock: nil}),                do: []
+  defp lock(%{lock: "ALLOW FILTERING"}),  do: "ALLOW FILTERING"
   defp lock(query), do: support_error!(query, "locking")
 
-  defp using(nil, nil),       do: nil
-  defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
-  defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
-  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
+  defp using(nil, nil),       do: []
+  defp using(ttl, nil),       do: ["USING TTL", primitive(ttl)]
+  defp using(nil, timestamp), do: ["USING TIMESTAMP", primitive(timestamp)]
+  defp using(ttl, timestamp), do: ["USING TTL", primitive(ttl), "AND TIMESTAMP", primitive(timestamp)]
 
   defp only_when(true, a), do: a
-  defp only_when(false, _), do: nil
+  defp only_when(false, _), do: []
   defp only_when(x, a), do: only_when(!is_nil(x), a)
 
-  defp boolean(exprs, sources, query) do
+  defp boolean(exprs, query) do
     relations =
       Enum.map exprs, fn
-        %BooleanExpr{expr: expr, op: :and} -> expr(expr, sources, query)
+        %BooleanExpr{expr: expr, op: :and} -> expr(expr, query)
         %BooleanExpr{op: :or} -> support_error!(query, "OR operator")
       end
 
-    join_values(relations, " AND ")
+    Enum.intersperse(relations, "AND")
   end
 
-  defp select_fields([], _sources, query) do
+  defp select_fields([], query) do
     error!(query, "bad select clause")
   end
 
-  defp select_fields(fields, sources, query) do
+  defp select_fields(fields, query) do
     selectors =
       Enum.map fields, fn
         {key, value} ->
-          assemble_values [expr(value, sources, query), "AS", identifier(key)]
+          assemble [expr(value, query), "AS", identifier(key)]
         value ->
-          expr(value, sources, query)
+          expr(value, query)
       end
 
-    join_values(selectors, ", ")
+    Enum.join(selectors, ", ")
   end
 
   defp identifier(name) when is_atom(name) do
@@ -436,25 +432,7 @@ defmodule EctoCassandra do
   defp table_name(prefix, name), do: table_name(prefix) <> "." <> table_name(name)
 
   defp assemble(list) do
-    list |> compact |> Enum.join(" ")
-  end
-
-  defp assemble_values(list) when is_list(list) do
-    join_values(list, " ")
-  end
-
-  defp join_values(list, joiner \\ "") when is_list(list) do
-    {parts, values} =
-      list
-      |> Enum.map(fn
-          nil            -> nil
-          {part, values} -> {part, values}
-          part           -> {part, []}
-         end)
-      |> compact
-      |> Enum.unzip
-
-    {Enum.join(parts, joiner), Enum.concat(values)}
+    list |> List.flatten |> Enum.join(" ")
   end
 
   Enum.map @binary_operators_map, fn {op, term} ->
@@ -463,87 +441,66 @@ defmodule EctoCassandra do
 
   defp call_type(func, _arity), do: {:func, Atom.to_string(func)}
 
-  defp expr({:^, [], [_]}, _sources, _query), do: "?"
+  defp expr({:^, [], [_]}, _query), do: "?"
 
-  defp expr({{:., _, [{:&, _, [_]}, field]}, _, []}, _sources, _query) when is_atom(field) do
+  defp expr({{:., _, [{:&, _, [_]}, field]}, _, []}, _query) when is_atom(field) do
     identifier(field)
   end
 
-  defp expr({:&, _, [_idx, fields, _counter]}, _sources, _query) do
+  defp expr({:&, _, [_idx, fields, _counter]}, _query) do
     Enum.map_join(fields, ", ", &identifier/1)
   end
 
-  defp expr({:in, _, [left, right]}, sources, query) when is_list(right) do
-    items =
-      right
-      |> Enum.map(&primitive(&1))
-      |> join_values(", ")
-
-    join_values [expr(left, sources, query), " IN (", items, ")"]
+  defp expr({:in, _, [left, right]}, query) do
+    assemble [expr(left, query), "IN", expr(right, query)]
   end
 
-  defp expr({:in, _, [left, right]}, sources, query) do
-    assemble_values [expr(left, sources, query), "IN", expr(right, sources, query)]
-  end
-
-  defp expr({:is_nil, _, _}, _sources, query) do
+  defp expr({:is_nil, _, _}, query) do
     support_error!(query, "IS NULL relation")
   end
 
-  defp expr({:not, _, _}, _sources, query) do
+  defp expr({:not, _, _}, query) do
     support_error!(query, "NOT relation")
   end
 
-  defp expr({:or, _, _}, _sources, query) do
+  defp expr({:or, _, _}, query) do
     support_error!(query, "OR operator")
   end
 
-  defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
-    error!(query, "Cassandra adapter does not support keyword or interpolated fragments")
+  defp expr({:fragment, _, [kw]}, query) when is_list(kw) or tuple_size(kw) == 3 do
+    error!(query, "Cassandra adapter does not support keyword or fragments")
   end
 
-  defp expr({:fragment, _, parts}, sources, query) do
-    parts =
-      Enum.map parts, fn
-        {:raw, str}   -> str
-        {:expr, expr} -> expr(expr, sources, query)
-      end
-
-    join_values parts
+  defp expr({:fragment, _, parts}, query) do
+    Enum.map_join parts, "", fn
+      {:raw, str}   -> str
+      {:expr, expr} -> expr(expr, query)
+    end
   end
 
-  defp expr(list, sources, query) when is_list(list) do
-    items =
-      list
-      |> Enum.map(&expr(&1, sources, query))
-      |> join_values(", ")
-
-    assemble_values ["(", items, ")"]
+  defp expr(list, query) when is_list(list) do
+    items = Enum.map_join(list, ", ", &expr(&1, query))
+    "(" <> items <> ")"
   end
 
-  defp expr({fun, _, args}, sources, query)
+  defp expr({fun, _, args}, query)
   when is_atom(fun) and is_list(args)
   do
     case call_type(fun, length(args)) do
       {:binary_operator, op} ->
-        [left, right] = Enum.map(args, &binary_op_arg_expr(&1, sources, query))
-        assemble_values [left, op, right]
+        [left, right] = Enum.map(args, &binary_op_arg_expr(&1, query))
+        "#{left} #{op} #{right}"
 
       {:func, func} ->
-        params =
-          args
-          |> Enum.map(&expr(&1, sources, query))
-          |> join_values(", ")
-
-        join_values [func, "(", params, ")"]
+        "#{func}#{expr(args, query)}"
     end
   end
 
-  defp expr(%Ecto.Query.Tagged{value: value}, sources, query) do
-    expr(value, sources, query)
+  defp expr(%Ecto.Query.Tagged{value: value}, query) do
+    expr(value, query)
   end
 
-  defp expr(value, _sources, _query)
+  defp expr(value, _query)
   when is_nil(value) or
        value == true or
        value == false or
@@ -551,14 +508,28 @@ defmodule EctoCassandra do
        is_integer(value) or
        is_float(value)
   do
-    {"?", [value]}
+    primitive(value)
   end
 
-  defp primitive(nil), do: "NULL"
-  defp primitive(true), do: "TRUE"
+  defp primitive(nil),   do: "NULL"
+  defp primitive(true),  do: "TRUE"
   defp primitive(false), do: "FALSE"
-  defp primitive(value) when is_bitstring(value), do: quote_string(value)
+  defp primitive(:now),  do: "now()"
+  defp primitive(:uuid), do: "uuid()"
+  defp primitive(value) when is_binary(value) or is_atom(value), do: quote_string(value)
   defp primitive(value) when is_integer(value) or is_float(value), do: "#{value}"
+  defp primitive(%DateTime{} = datetime), do: datetime |> DateTime.to_naive |> primitive
+  defp primitive(%NaiveDateTime{microsecond: {mic, _}} = naive) do
+    naive = %NaiveDateTime{naive | microsecond: {mic, 3}}
+    primitive(NaiveDateTime.to_iso8601(naive) <> "+0000")
+  end
+  defp primitive(map) when is_map(map), do: map(map)
+  defp primitive({_,_,_,_} = ip), do: ip |> Tuple.to_list |> Enum.join(".") |> primitive
+  defp primitive({_,_,_,_,_,_} = ip), do: ip |> Tuple.to_list |> Enum.join(":") |> primitive
+
+  defp map(map) do
+    "{" <> Enum.map_join(map, ", ", fn {key, value} -> primitive(key) <> " : " <> primitive(value) end) <> "}"
+  end
 
   defp quote_string(value) when is_atom(value) do
     value |> Atom.to_string |> quote_string
@@ -575,13 +546,13 @@ defmodule EctoCassandra do
     String.replace(value, "'", "''")
   end
 
-  defp binary_op_arg_expr({op, _, [_, _]} = expr, sources, query)
+  defp binary_op_arg_expr({op, _, [_, _]} = expr, query)
   when op in @binary_operators do
-    expr(expr, sources, query)
+    expr(expr, query)
   end
 
-  defp binary_op_arg_expr(expr, sources, query) do
-    expr(expr, sources, query)
+  defp binary_op_arg_expr(expr, query) do
+    expr(expr, query)
   end
 
   defp error!(query, message) do
@@ -602,22 +573,17 @@ defmodule EctoCassandra do
       name -> identifier(name)
     end
 
-    "(#{fields})"
+    "(" <> fields <> ")"
   end
 
-  defp table_options(%Table{options: nil, comment: nil}), do: nil
-
-  defp table_options(%Table{options: nil, comment: comment}) do
-    "WITH comment=#{quote_string(comment)}"
-  end
-
-  defp table_options(%Table{options: options, comment: nil}) do
-    options
-  end
-
-  defp table_options(%Table{options: options, comment: comment}) do
-    "#{options} AND comment=#{quote_string(comment)}"
-  end
+  defp table_options(%Table{options: nil, comment: nil}),
+    do: []
+  defp table_options(%Table{options: nil, comment: comment}),
+    do: "WITH comment=#{quote_string(comment)}"
+  defp table_options(%Table{options: options, comment: nil}),
+    do: options
+  defp table_options(%Table{options: options, comment: comment}),
+    do: "#{options} AND comment=#{quote_string(comment)}"
 
   defp primary_key_definition(columns) do
     partition_key =
@@ -669,26 +635,16 @@ defmodule EctoCassandra do
     ]
   end
 
-  defp column_type({:map, {ktype, vtype}}) do
-    "MAP<#{column_type(ktype)}, #{column_type(vtype)}>"
-  end
-
-  defp column_type({:map, type}) do
-    "MAP<text, #{column_type(type)}>"
-  end
-
-  defp column_type(:map) do
-    "MAP<text, text>"
-  end
-
-  defp column_type({:array, type}) do
-    "LIST<#{column_type(type)}>"
-  end
-
-  defp column_type({:set, type}) do
-    "SET<#{column_type(type)}>"
-  end
-
+  defp column_type({:map, {ktype, vtype}}),
+    do: "MAP<#{column_type(ktype)}, #{column_type(vtype)}>"
+  defp column_type({:map, type}),
+    do: "MAP<text, #{column_type(type)}>"
+  defp column_type(:map),
+    do: "MAP<text, text>"
+  defp column_type({:array, type}),
+    do: "LIST<#{column_type(type)}>"
+  defp column_type({:set, type}),
+    do: "SET<#{column_type(type)}>"
   defp column_type(:id),             do: "uuid"
   defp column_type(:binary_id),      do: "timeuuid"
   defp column_type(:uuid),           do: "uuid"
@@ -708,12 +664,12 @@ defmodule EctoCassandra do
       if Keyword.has_key?(options, :comment) do
         migration_support_error!("columns comment")
       else
-        nil
+        []
       end
     end
   end
 
-  defp column_changes([]), do: nil
+  defp column_changes([]), do: []
   defp column_changes([{change, _, _, _} | _] = columns) do
     if Enum.all?(columns, fn {c, _, _, _} -> c == change end) do
       column_changes(change, columns)
@@ -726,20 +682,18 @@ defmodule EctoCassandra do
     changes = Enum.map_join columns, ", ", fn
       {:add, name, type, _} -> "#{identifier(name)} #{column_type(type)}"
     end
-
-    "ADD #{changes}"
+    ["ADD", changes]
   end
 
   defp column_changes(:remove, columns) do
     changes = Enum.map_join columns, " ", fn
       {:remove, name, _, _} -> identifier(name)
     end
-
-    "DROP #{changes}"
+    ["DROP", changes]
   end
 
   defp column_changes(:modify, [{:modify, name, type, _options}]) do
-    "#{identifier(name)} TYPE #{column_type(type)}"
+    [identifier(name), "TYPE", column_type(type)]
   end
 
   defp column_changes(:modify, _columns) do
