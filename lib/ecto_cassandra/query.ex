@@ -31,7 +31,8 @@ defmodule EctoCassandra.Query do
   end
 
   defmacro token(fields) when is_list(fields) do
-    quote do: fragment("token(?)", unquote_splicing(fields))
+    marks = Enum.map_join(fields, ", ", fn _ -> "?" end)
+    quote do: fragment(unquote("token(#{marks})"), unquote_splicing(fields))
   end
 
   defmacro token(field) do

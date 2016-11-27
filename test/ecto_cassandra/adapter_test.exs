@@ -362,6 +362,24 @@ defmodule EctoCassandra.AdapterTest do
         |> where([u], u.id < token("sometest"))
         |> select([u], as_blob(u.data, :text))
       assert cql(query) == "SELECT textAsBlob(data) FROM users WHERE id < token('sometest')"
+
+      query =
+        User
+        |> where([u], u.id < token(^"sometest"))
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == "SELECT textAsBlob(data) FROM users WHERE id < token(?)"
+
+      query =
+        User
+        |> where([u], u.id < token([^"sometest", "other test"]))
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == "SELECT textAsBlob(data) FROM users WHERE id < token(?, 'other test')"
+
+      query =
+        User
+        |> where([u], u.id < token([^"sometest", ^"other test"]))
+        |> select([u], as_blob(u.data, :text))
+      assert cql(query) == "SELECT textAsBlob(data) FROM users WHERE id < token(?, ?)"
     end
 
     test "cast" do
