@@ -523,7 +523,11 @@ defmodule EctoCassandra do
   defp primitive({_,_,_,_,_,_} = ip), do: ip |> Tuple.to_list |> Enum.join(":") |> primitive
 
   defp map(map) do
-    "{" <> Enum.map_join(map, ", ", fn {key, value} -> primitive(key) <> " : " <> primitive(value) end) <> "}"
+    map = Enum.map_join map, ", ", fn
+      {key, value} when is_binary(value) -> primitive(key, :string) <> " : " <> primitive(value, :string)
+      {key, value} -> primitive(key, :string) <> " : " <> primitive(value)
+    end
+    "{#{map}}"
   end
 
   defp quote_string(value, handle_uuid \\ true)
