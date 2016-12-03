@@ -262,7 +262,7 @@ defmodule EctoCassandra do
   defp values(autogenerate, fields) do
     {auto_names, auto_values} =
       autogenerate
-      |> Enum.map(fn {name, type} -> {name, autogenerate_value(type)} end)
+      |> Enum.map(fn {name, type} -> {name, autogenerate(type)} end)
       |> Enum.unzip
 
     {names, values} = Enum.unzip(fields)
@@ -273,8 +273,8 @@ defmodule EctoCassandra do
     ["(#{names})", "VALUES", "(#{values})"]
   end
 
-  defp autogenerate_value("timeuuid"), do: :now
-  defp autogenerate_value("uuid"), do: :uuid
+  defp autogenerate("timeuuid"), do: :now
+  defp autogenerate("uuid"), do: :uuid
 
   defp value(:now),  do: "now()"
   defp value(:uuid), do: "uuid()"
@@ -283,8 +283,7 @@ defmodule EctoCassandra do
   defp set(fields) do
     sets =
       fields
-      |> Keyword.keys
-      |> Enum.map(&"#{identifier(&1)} = ?")
+      |> Enum.map(fn {key, value} -> "#{identifier(key)} = #{value(value)}" end)
       |> Enum.join(", ")
 
     ["SET", sets]

@@ -49,6 +49,11 @@ defmodule EctoCassandra.Integration.RepoTest do
     post = %Post{title: "insert, update, delete"}
     meta = post.__meta__
 
+    assert %Post{} = to_be_updated = TestRepo.insert!(post)
+    changeset = Ecto.Changeset.change(to_be_updated, visits: 10)
+    assert {:ok, updated} = TestRepo.update(changeset)
+    assert updated.updated_at > updated.inserted_at
+
     deleted_meta = put_in meta.state, :deleted
     assert %Post{} = to_be_deleted = TestRepo.insert!(post)
     assert %Post{__meta__: ^deleted_meta} = TestRepo.delete!(to_be_deleted)

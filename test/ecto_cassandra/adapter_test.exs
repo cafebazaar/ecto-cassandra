@@ -335,7 +335,7 @@ defmodule EctoCassandra.AdapterTest do
       [id: "4a00d739-63ce-42ad-a200-b214429f7559"],
       []
     )
-    assert query == {"UPDATE users SET name = ?, age = ? WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}
+    assert query == {"UPDATE users SET name = 'John', age = 27 WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}
 
     query = EctoCassandra.update(
       "u",
@@ -344,7 +344,7 @@ defmodule EctoCassandra.AdapterTest do
       [id: "4a00d739-63ce-42ad-a200-b214429f7559"],
       []
     )
-    assert query == {"UPDATE u.users SET name = ?, age = ? WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}
+    assert query == {"UPDATE u.users SET name = 'John', age = 27 WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}
   end
 
   test "delete" do
