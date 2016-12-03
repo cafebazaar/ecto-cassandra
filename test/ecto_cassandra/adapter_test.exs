@@ -317,13 +317,13 @@ defmodule EctoCassandra.AdapterTest do
   end
 
   test "insert" do
-    assert EctoCassandra.insert(nil, "users", [name: "John", age: 27], [id: :binary_id], []) ==
+    assert EctoCassandra.insert(nil, "users", [name: "John", age: 27], [:id], [id: :binary_id], []) ==
       {"INSERT INTO users (id, name, age) VALUES (now(), 'John', 27)", []}
 
-    assert EctoCassandra.insert("prefix", "users", [name: "Jack", age: 28], [id: :id], []) ==
+    assert EctoCassandra.insert("prefix", "users", [name: "Jack", age: 28], [:id], [id: :id], []) ==
       {"INSERT INTO prefix.users (id, name, age) VALUES (uuid(), 'Jack', 28)", []}
 
-    assert EctoCassandra.insert("prefix", "users", [id: :now, name: "Jack", age: 29, inserted_at: :now], [], []) ==
+    assert EctoCassandra.insert("prefix", "users", [id: :now, name: "Jack", age: 29, inserted_at: :now], [], [], []) ==
       {"INSERT INTO prefix.users (id, name, age, inserted_at) VALUES (now(), 'Jack', 29, now())", []}
   end
 
@@ -333,6 +333,7 @@ defmodule EctoCassandra.AdapterTest do
       "users",
       [name: "John", age: 27],
       [id: "4a00d739-63ce-42ad-a200-b214429f7559"],
+      [],
       []
     )
     assert query == {"UPDATE users SET name = 'John', age = 27 WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}
@@ -342,6 +343,7 @@ defmodule EctoCassandra.AdapterTest do
       "users",
       [name: "John", age: 27],
       [id: "4a00d739-63ce-42ad-a200-b214429f7559"],
+      [],
       []
     )
     assert query == {"UPDATE u.users SET name = 'John', age = 27 WHERE id = 4a00d739-63ce-42ad-a200-b214429f7559", []}

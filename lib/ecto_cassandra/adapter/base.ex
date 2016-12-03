@@ -26,8 +26,8 @@ defmodule EctoCassandra.Adapter.Base do
       end
 
       def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
-        autogenerate = Enum.map(autogenerate, &{&1, schema.__schema__(:type, &1)})
-        {cql, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, options)
+        types = schema.__schema__(:types)
+        {cql, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, types, options)
         [repo, cql, options, on_conflict]
       end
 
@@ -35,12 +35,14 @@ defmodule EctoCassandra.Adapter.Base do
         autogenerate = {auto_column, _} = schema.__schema__(:autogenerate_id)
         header = header -- [auto_column]
         fields = Enum.zip(header, Stream.cycle([nil]))
-        {cql, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], options)
+        types = schema.__schema__(:types)
+        {cql, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], types, options)
         [repo, {cql, list}, options, on_conflict]
       end
 
-      def update(repo, %{source: {prefix, source}}, fields, filters, [], options) do
-        {cql, options} = EctoCassandra.update(prefix, source, fields, filters, options)
+      def update(repo, %{source: {prefix, source}, schema: schema}, fields, filters, [], options) do
+        types = schema.__schema__(:types)
+        {cql, options} = EctoCassandra.update(prefix, source, fields, filters, types, options)
         [repo, cql, options]
       end
 

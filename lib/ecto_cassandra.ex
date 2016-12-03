@@ -99,12 +99,11 @@ defmodule EctoCassandra do
     end
   end
 
-  def insert(prefix, source, fields, autogenerate, options) do
-    autogenerate = Enum.map(autogenerate, fn {name, type} -> {name, column_type(type)} end)
+  def insert(prefix, source, fields, autogenerate, types, options) do
     query = assemble [
       "INSERT INTO",
       table_name(prefix, source),
-      values(autogenerate, fields),
+      values(autogenerate, fields, types),
       only_when(options[:if] == :not_exists, "IF NOT EXISTS"),
       using(options[:ttl], options[:timestamp]),
     ]
@@ -114,14 +113,14 @@ defmodule EctoCassandra do
     {query, options}
   end
 
-  def update(prefix, source, fields, filters, options) do
+  def update(prefix, source, fields, filters, types, options) do
     # TODO: support IF conditions
 
     query = assemble [
       "UPDATE",
       table_name(prefix, source),
       using(options[:ttl], options[:timestamp]),
-      set(fields),
+      set(fields, types),
       where(filters),
       only_when(options[:if] == :exists, "IF EXISTS"),
     ]
@@ -259,31 +258,25 @@ defmodule EctoCassandra do
 
   ### Helpers ###
 
-  defp values(autogenerate, fields) do
-    {auto_names, auto_values} =
-      autogenerate
-      |> Enum.map(fn {name, type} -> {name, autogenerate(type)} end)
+  defp values(autogenerate, fields, types) do
+    autogenerate = Enum.zip(autogenerate, Stream.cycle([nil]))
+
+    {names, values} =
+      autogenerate ++ fields
+      |> Enum.map(fn {name, val} -> {identifier(name), value(val, types[name])} end)
       |> Enum.unzip
 
-    {names, values} = Enum.unzip(fields)
-
-    names = Enum.map_join(auto_names ++ names, ", ", &identifier/1)
-    values = Enum.map_join(auto_values ++ values, ", ", &value/1)
-
-    ["(#{names})", "VALUES", "(#{values})"]
+    ["(#{Enum.join(names, ", ")})", "VALUES", "(#{Enum.join(values, ", ")})"]
   end
 
-  defp autogenerate("timeuuid"), do: :now
-  defp autogenerate("uuid"), do: :uuid
+  defp value(nil, :binary_id),  do: "now()"
+  defp value(nil, :id), do: "uuid()"
+  defp value(value, type), do: primitive(value, type)
 
-  defp value(:now),  do: "now()"
-  defp value(:uuid), do: "uuid()"
-  defp value(value), do: primitive(value)
-
-  defp set(fields) do
+  defp set(fields, types) do
     sets =
       fields
-      |> Enum.map(fn {key, value} -> "#{identifier(key)} = #{value(value)}" end)
+      |> Enum.map(fn {name, val} -> "#{identifier(name)} = #{value(val, types[name])}" end)
       |> Enum.join(", ")
 
     ["SET", sets]
@@ -510,6 +503,9 @@ defmodule EctoCassandra do
     primitive(value)
   end
 
+  defp primitive(value, :string), do: quote_string(value, false)
+  defp primitive(value, _), do: primitive(value)
+
   defp primitive(nil),   do: "NULL"
   defp primitive(true),  do: "TRUE"
   defp primitive(false), do: "FALSE"
@@ -530,14 +526,17 @@ defmodule EctoCassandra do
     "{" <> Enum.map_join(map, ", ", fn {key, value} -> primitive(key) <> " : " <> primitive(value) end) <> "}"
   end
 
-  defp quote_string(value) when is_atom(value) do
-    value |> Atom.to_string |> quote_string
+  defp quote_string(value, handle_uuid \\ true)
+  defp quote_string(value, handle_uuid) when is_atom(value) do
+    value |> Atom.to_string |> quote_string(handle_uuid)
   end
-
-  defp quote_string(value) do
+  defp quote_string(value, false) do
+    "'#{escape_string(value)}'"
+  end
+  defp quote_string(value, true) do
     case Ecto.UUID.cast(value) do
       {:ok, uuid} -> uuid
-      :error      -> "'#{escape_string(value)}'"
+      :error      -> quote_string(value, false)
     end
   end
 
