@@ -107,10 +107,10 @@ defmodule EctoCassandra.Adapter do
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
         :ok
+      {:error, {_, message}} ->
+        raise RuntimeError, message: message
       {:error, reason} ->
         raise RuntimeError, message: reason
-      {_, message} ->
-        raise RuntimeError, message: message
     end
   end
 
@@ -164,10 +164,10 @@ defmodule EctoCassandra.Adapter do
         else
           {:error, :stale}
         end
+      {:error, {_, message}} ->
+        raise RuntimeError, message: message
       {:error, reason} ->
         raise RuntimeError, message: reason
-      {_, message} ->
-        raise RuntimeError, message: message
     end
   end
 

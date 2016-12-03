@@ -61,7 +61,7 @@ defmodule EctoCassandra do
 
   def update_all(query, options) do
     where = where(query)
-    if is_nil(where), do: raise ArgumentError, "Cassandra requires where caluse for update"
+    if where == [], do: raise ArgumentError, "Cassandra requires where caluse for update"
 
     query = assemble [
       "UPDATE",
