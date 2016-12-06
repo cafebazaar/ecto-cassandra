@@ -8,9 +8,9 @@ defmodule EctoCassandra.Adapter.Base do
       end
 
       def execute(repo, %{fields: fields}, {:cache, update, {id, type, query}}, params, process, options) do
-        {cql, options} = apply(EctoCassandra, type, [query, options])
+        {cql, values, options} = apply(EctoCassandra, type, [query, options])
         update.({id, cql})
-        options = Keyword.put(options, :values, params)
+        options = Keyword.put(options, :values, params ++ values)
         [cql, options]
       end
 
