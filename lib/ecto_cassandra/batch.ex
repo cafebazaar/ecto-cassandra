@@ -1,8 +1,6 @@
 defmodule EctoCassandra.Batch do
   @moduledoc false
 
-  require Logger
-
   use EctoCassandra.Adapter.Base
 
   @adapter EctoCassandra.Batch
@@ -57,12 +55,18 @@ defmodule EctoCassandra.Batch do
     {queries, values} = get_queries(agent)
     {cql, cql_values, options} = EctoCassandra.batch(queries, options)
     values = cql_values ++ values
-    Logger.debug("Executing:\n\n  #{cql}\n  #{inspect options}")
     exec(repo, cql, Keyword.put(options, :values, values))
   end
 
   defp exec(repo, cql, options) do
-    case repo.execute(cql, options) do
+    entry =
+      cql
+      |> repo.execute(options)
+      |> Map.merge(%{query: cql, params: options[:values]})
+
+    repo.__log__(struct(Ecto.LogEntry, entry))
+
+    case entry.result do
       {:ok, :done} ->
         :ok
       {:ok, %{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]}} ->
@@ -74,7 +78,6 @@ defmodule EctoCassandra.Batch do
           {:ok, []}
         end
       {code, message} ->
-        Logger.debug("ERROR [#{code}] #{message}")
         raise RuntimeError, message: message
     end
   end

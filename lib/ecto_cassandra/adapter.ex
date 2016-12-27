@@ -7,8 +7,6 @@ defmodule EctoCassandra.Adapter do
 
   use EctoCassandra.Adapter.Base
 
-  require Logger
-
   @behaviour Ecto.Adapter
   @behaviour Ecto.Adapter.Migration
   @behaviour Ecto.Adapter.Storage
@@ -19,10 +17,16 @@ defmodule EctoCassandra.Adapter do
   def execute_ddl(repo, definitions, options) do
     cql = EctoCassandra.ddl(definitions)
     options = Keyword.put_new(options, :consistency, :all)
-    log_query(cql, options)
-    case repo.execute(cql, options) do
-      {:ok, result} ->
-        Logger.debug(inspect result)
+
+    entry =
+      cql
+      |> repo.execute(options)
+      |> Map.merge(%{query: cql, params: options[:values] || []})
+
+    repo.__log__(struct(Ecto.LogEntry, entry))
+
+    case entry.result do
+      {:ok, _} ->
         :ok
       {:error, {_, message}} ->
         raise RuntimeError, message: message
@@ -100,9 +104,16 @@ defmodule EctoCassandra.Adapter do
 
   @doc false
   def execute(repo, %{fields: fields} = meta, query, params, process, options) do
-    [cql, options] = args = super(repo, meta, query, params, process, options)
-    log_query(cql, options)
-    case apply(&repo.execute/2, args) do
+    [cql, options] = super(repo, meta, query, params, process, options)
+
+    entry =
+      cql
+      |> repo.execute(options)
+      |> Map.merge(%{query: cql, params: options[:values] || []})
+
+    repo.__log__(struct(Ecto.LogEntry, entry))
+
+    case entry.result do
       {:ok, %{rows_count: count, rows: rows}} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
@@ -144,16 +155,21 @@ defmodule EctoCassandra.Adapter do
     options = Keyword.put(options, :keyspace, nil)
     {:ok, cluster} = Cassandra.Cluster.start_link(options[:contact_points], options)
     {:ok, session} = Cassandra.Session.start_link(cluster, options)
-    log_query(cql, options)
-    result = Cassandra.Session.execute(session, cql, options)
+    %{result: result} = Cassandra.Session.execute(session, cql, options)
     :ok = GenServer.stop(cluster)
     :ok = GenServer.stop(session)
     result
   end
 
   defp exec(repo, cql, options, on_conflict \\ :error) do
-    log_query(cql, options)
-    case repo.execute(cql, options) do
+    entry =
+      cql
+      |> repo.execute(options)
+      |> Map.merge(%{query: cql, params: options[:values] || []})
+
+    repo.__log__(struct(Ecto.LogEntry, entry))
+
+    case entry.result do
       {:ok, :done} ->
         {:ok, []}
       {:ok, %{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]}} ->
@@ -169,9 +185,5 @@ defmodule EctoCassandra.Adapter do
       {:error, reason} ->
         raise RuntimeError, message: reason
     end
-  end
-
-  defp log_query(cql, options) do
-    Logger.debug("Executing:\n\n  #{cql}\n  #{inspect options}")
   end
 end
