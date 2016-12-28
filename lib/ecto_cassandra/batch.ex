@@ -77,7 +77,7 @@ defmodule EctoCassandra.Batch do
         else
           {:ok, []}
         end
-      {code, message} ->
+      {_code, message} ->
         raise RuntimeError, message: message
     end
   end

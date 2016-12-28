@@ -18,14 +18,7 @@ defmodule EctoCassandra.Adapter do
     cql = EctoCassandra.ddl(definitions)
     options = Keyword.put_new(options, :consistency, :all)
 
-    entry =
-      cql
-      |> repo.execute(options)
-      |> Map.merge(%{query: cql, params: options[:values] || []})
-
-    repo.__log__(struct(Ecto.LogEntry, entry))
-
-    case entry.result do
+    case exec_and_log(repo, cql, options) do
       {:ok, _} ->
         :ok
       {:error, {_, message}} ->
@@ -106,14 +99,7 @@ defmodule EctoCassandra.Adapter do
   def execute(repo, %{fields: fields} = meta, query, params, process, options) do
     [cql, options] = super(repo, meta, query, params, process, options)
 
-    entry =
-      cql
-      |> repo.execute(options)
-      |> Map.merge(%{query: cql, params: options[:values] || []})
-
-    repo.__log__(struct(Ecto.LogEntry, entry))
-
-    case entry.result do
+    case exec_and_log(repo, cql, options) do
       {:ok, %{rows_count: count, rows: rows}} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       {:ok, :done} ->
@@ -162,14 +148,7 @@ defmodule EctoCassandra.Adapter do
   end
 
   defp exec(repo, cql, options, on_conflict \\ :error) do
-    entry =
-      cql
-      |> repo.execute(options)
-      |> Map.merge(%{query: cql, params: options[:values] || []})
-
-    repo.__log__(struct(Ecto.LogEntry, entry))
-
-    case entry.result do
+    case exec_and_log(repo, cql, options) do
       {:ok, :done} ->
         {:ok, []}
       {:ok, %{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]}} ->
@@ -185,5 +164,22 @@ defmodule EctoCassandra.Adapter do
       {:error, reason} ->
         raise RuntimeError, message: reason
     end
+  end
+
+  defp exec_and_log(repo, cql, options) do
+    profile = %{result: result} = repo.execute(cql, options)
+
+    entry = %Ecto.LogEntry{
+      query: cql,
+      params: Keyword.get(options, :values, []),
+      result: result,
+      query_time: Enum.sum(profile.query_times || []),
+      queue_time: Enum.sum(profile.queue_times || []),
+      connection_pid: hd(profile.connections || [nil]),
+    }
+
+    repo.__log__(entry)
+
+    entry.result
   end
 end
