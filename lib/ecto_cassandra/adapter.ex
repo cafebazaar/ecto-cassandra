@@ -167,19 +167,23 @@ defmodule EctoCassandra.Adapter do
   end
 
   defp exec_and_log(repo, cql, options) do
+    {log, options} = Keyword.pop(options, :log, true)
+
     profile = %{result: result} = repo.execute(cql, options)
 
-    entry = %Ecto.LogEntry{
-      query: cql,
-      params: Keyword.get(options, :values, []),
-      result: result,
-      query_time: Enum.sum(profile.query_times || []),
-      queue_time: Enum.sum(profile.queue_times || []),
-      connection_pid: hd(profile.connections || [nil]),
-    }
+    if log do
+      entry = %Ecto.LogEntry{
+        query: cql,
+        params: Keyword.get(options, :values, []),
+        result: result,
+        query_time: Enum.sum(profile.query_times || []),
+        queue_time: Enum.sum(profile.queue_times || []),
+        connection_pid: hd(profile.connections || [nil]),
+      }
 
-    repo.__log__(entry)
+      repo.__log__(entry)
+    end
 
-    entry.result
+    result
   end
 end
