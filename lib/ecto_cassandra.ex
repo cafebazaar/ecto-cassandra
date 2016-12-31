@@ -232,8 +232,8 @@ defmodule EctoCassandra do
     durable_writes = Keyword.get(options, :durable_writes)
 
     with_cluse = case durable_writes do
-      nil -> "#{replication}"
-      _   -> "#{replication} AND durable_writes = #{durable_writes}"
+      nil -> replication
+      _   -> [replication, " AND durable_writes = ", durable_writes]
     end
 
     {query, []} = assemble [
@@ -560,7 +560,8 @@ defmodule EctoCassandra do
   defp primitive(:now),  do: "now()"
   defp primitive(:uuid), do: "uuid()"
   defp primitive(value) when is_binary(value) or is_atom(value), do: quote_string(value)
-  defp primitive(value) when is_integer(value) or is_float(value), do: "#{value}"
+  defp primitive(value) when is_integer(value), do: Integer.to_string(value)
+  defp primitive(value) when is_float(value), do: Float.to_string(value)
   defp primitive(%DateTime{} = datetime), do: datetime |> DateTime.to_naive |> primitive
   defp primitive(%NaiveDateTime{microsecond: {mic, _}} = naive) do
     naive = %NaiveDateTime{naive | microsecond: {mic, 3}}
@@ -572,10 +573,12 @@ defmodule EctoCassandra do
 
   defp map(map) do
     map = Enum.map_join map, ", ", fn
-      {key, value} when is_binary(value) -> primitive(key, :string) <> " : " <> primitive(value, :string)
-      {key, value} -> primitive(key, :string) <> " : " <> primitive(value)
+      {key, value} when is_binary(value) ->
+        [primitive(key, :string), " : ", primitive(value, :string)]
+      {key, value} ->
+        [primitive(key, :string), " : ", primitive(value)]
     end
-    "{#{map}}"
+    ["{", map, "}"]
   end
 
   defp quote_string(value, handle_uuid \\ true)
@@ -583,7 +586,7 @@ defmodule EctoCassandra do
     value |> Atom.to_string |> quote_string(handle_uuid)
   end
   defp quote_string(value, false) do
-    "'#{escape_string(value)}'"
+    ["'", escape_string(value), "'"]
   end
   defp quote_string(value, true) do
     case Ecto.UUID.cast(value) do
