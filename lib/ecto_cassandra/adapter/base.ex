@@ -4,22 +4,22 @@ defmodule EctoCassandra.Adapter.Base do
   defmacro __using__(_) do
     quote do
       def prepare(type, query) do
-        {:cache, {System.unique_integer([:positive]), type, query}}
+        {:cache, {:erlang.phash2(query), type, query}}
       end
 
-      def execute(repo, %{fields: fields}, {:cache, update, {id, type, query}}, params, process, options) do
+      def execute(repo, %{fields: fields}, {:cache, update, {hash, type, query}}, params, process, options) do
         {cql, values, options} = apply(EctoCassandra, type, [query, options])
-        update.({id, cql})
+        update.({hash, cql})
         options = Keyword.put(options, :values, params ++ values)
         [cql, options]
       end
 
-      def execute(repo, _meta, {:cached, _reset, {id, cql}}, params, _process, options) do
+      def execute(repo, _meta, {:cached, _reset, {_hash, cql}}, params, _process, options) do
         options = Keyword.put(options, :values, params)
         [cql, options]
       end
 
-      def execute(repo, %{fields: fields}, {:nocache, {id, type, query}}, params, process, options) do
+      def execute(repo, %{fields: fields}, {:nocache, {_hash, type, query}}, params, process, options) do
         {cql, options} = apply(EctoCassandra, type, [query, options])
         options = Keyword.put(options, :values, params)
         [cql, options]
