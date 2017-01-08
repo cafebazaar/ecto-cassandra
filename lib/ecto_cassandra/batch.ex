@@ -37,11 +37,11 @@ defmodule EctoCassandra.Batch do
   end
 
   def execute(_repo, _meta, _query, _params, _process, _options) do
-    error!
+    error!()
   end
 
   def insert_all(_repo, _meta, _header, _list, _on_conflict, _returning, _options) do
-    error!
+    error!()
   end
 
   def batch(repo, options, statements) do

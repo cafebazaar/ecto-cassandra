@@ -17,8 +17,8 @@ defmodule EctoCassandra.Mixfile do
     ],
     source_url: "https://github.com/cafebazaar/ecto-cassandra",
     description: "Cassandra Adapter for Ecto",
-    package: package,
-    deps: deps,
+    package: package(),
+    deps: deps(),
   ]
 
   def application, do: [

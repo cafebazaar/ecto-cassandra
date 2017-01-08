@@ -3,7 +3,6 @@ defmodule EctoCassandra.Integration.User do
   import Ecto.Changeset
 
   @timestamps_opts [usec: true]
-  @foreign_key_type :uuid
   @primary_key {:id, :id, autogenerate: true}
   schema "users" do
     field :name
@@ -35,7 +34,7 @@ defmodule EctoCassandra.Integration.Post do
     field :posted, :date
     field :ip, EctoCassandra.INet
     belongs_to :author, EctoCassandra.Integration.User
-    timestamps
+    timestamps()
   end
 
   def changeset(schema, params) do

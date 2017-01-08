@@ -6,7 +6,7 @@ defmodule EctoCassandra.Integration.Migration do
       add :id, :uuid, partition_key: true
       add :name, :text
       add :hobbes, {:array, :string}
-      timestamps
+      timestamps()
     end
 
     create table(:posts, primary_key: false) do
@@ -24,7 +24,7 @@ defmodule EctoCassandra.Integration.Migration do
       add :author_id, :integer
       add :posted, :date
       add :ip, :inet
-      timestamps
+      timestamps()
     end
   end
 end
