@@ -207,18 +207,12 @@ defmodule EctoCassandra.MigrationTest do
           posts_category_id_permalink_index ON posts (category_id, permalink)
       """
     create = {:create, index(:posts, ["lower(permalink)"], name: "posts_main")}
-    assert cql(create) == join """
-        CREATE INDEX
-          posts_main ON posts (lower(permalink))
-      """
+    assert cql(create) == join "CREATE INDEX posts_main ON posts (lower(permalink))"
   end
 
   test "create index with prefix" do
     create = {:create, index(:posts, [:category_id], prefix: :foo)}
-    assert cql(create) == join """
-        CREATE INDEX
-          foo.posts_category_id_index ON foo.posts (category_id)
-      """
+    assert cql(create) == "CREATE INDEX posts_category_id_index ON foo.posts (category_id)"
   end
 
   test "create index with if not exists" do
@@ -247,7 +241,7 @@ defmodule EctoCassandra.MigrationTest do
   test "drop index with prefix" do
     create = {:drop, index(:posts, [:category_id], prefix: :foo)}
     assert cql(create) == join """
-        DROP INDEX foo.posts_category_id_index
+        DROP INDEX posts_category_id_index
       """
   end
 

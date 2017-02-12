@@ -197,7 +197,7 @@ defmodule EctoCassandra do
       only_when(index.using, "CUSTOM "),
       "INDEX ",
       only_when(command == :create_if_not_exists, "IF NOT EXISTS "),
-      index_name(index.prefix, index.name),
+      index_name(index.name),
       " ON ",
       table_name(index.prefix, index.table),
       index_identifiers(index),
@@ -212,7 +212,7 @@ defmodule EctoCassandra do
     {query, []} = assemble [
       "DROP INDEX ",
       only_when(command == :drop_if_exists, " IF EXISTS"),
-      index_name(index.prefix, index.name),
+      index_name(index.name),
     ]
     query
   end
@@ -405,9 +405,6 @@ defmodule EctoCassandra do
       raise ArgumentError, "bad identifier #{inspect name}"
     end
   end
-
-  defp index_name(nil, name),    do: index_name(name)
-  defp index_name(prefix, name), do: [table_name(prefix), ".", index_name(name)]
 
   defp index_name(name) when is_atom(name) do
     name |> Atom.to_string |> index_name
