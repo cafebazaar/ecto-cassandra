@@ -19,10 +19,9 @@ defmodule EctoCassandra.Adapter do
     options = Keyword.put_new(options, :consistency, :all)
 
     case exec_and_log(repo, cql, options) do
-      {:ok, _} ->
-        :ok
-      {:error, {_, message}} ->
-        raise RuntimeError, message: message
+      %CQL.Result.SchemaChange{} -> :ok
+      %CQL.Result.Void{}         -> :ok
+      %CQL.Error{} = error       -> raise error
     end
   end
 
@@ -39,11 +38,11 @@ defmodule EctoCassandra.Adapter do
       |> EctoCassandra.create_keyspace
 
     case run_query(cql, options) do
-      {:ok, %CQL.Result.SchemaChange{change_type: "CREATED", target: "KEYSPACE"}} ->
+      %CQL.Result.SchemaChange{change_type: "CREATED", target: "KEYSPACE"} ->
         :ok
-      {:ok, :done} ->
+      %CQL.Result.Void{} ->
         {:error, :already_up}
-      {:error, {_code, error}} ->
+      %CQL.Error{} = error ->
         {:error, error}
     end
   end
@@ -56,11 +55,11 @@ defmodule EctoCassandra.Adapter do
       |> EctoCassandra.drop_keyspace
 
     case run_query(cql, options) do
-      {:ok, %CQL.Result.SchemaChange{change_type: "DROPPED", target: "KEYSPACE"}} ->
+      %CQL.Result.SchemaChange{change_type: "DROPPED", target: "KEYSPACE"} ->
         :ok
-      {:ok, :done} ->
+      %CQL.Result.Void{} ->
         {:error, :already_down}
-      {:error, {_code, error}} ->
+      %CQL.Error{} = error ->
         {:error, error}
     end
   end
@@ -96,14 +95,10 @@ defmodule EctoCassandra.Adapter do
     [cql, options] = super(repo, meta, query, params, process, options)
 
     case exec_and_log(repo, cql, options) do
-      {:ok, %{rows_count: count, rows: rows}} ->
+      %CQL.Result.Rows{rows_count: count, rows: rows} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
-      {:ok, :done} ->
-        :ok
-      {:error, {_, message}} ->
-        raise RuntimeError, message: message
-      {:error, reason} ->
-        raise RuntimeError, message: reason
+      %CQL.Result.Void{} -> :ok
+      %CQL.Error{} = error -> raise error
     end
   end
 
@@ -134,52 +129,34 @@ defmodule EctoCassandra.Adapter do
   ### Helpers ###
 
   defp run_query(cql, options) do
-    options = Keyword.put(options, :keyspace, nil)
-    {:ok, cluster} = Cassandra.Cluster.start_link(options[:contact_points], options)
-    {:ok, session} = Cassandra.Session.start_link(cluster, options)
-    %{result: result} = Cassandra.Session.execute(session, cql, options)
-    :ok = GenServer.stop(cluster)
-    :ok = GenServer.stop(session)
-    result
+    case Keyword.get(options, :contact_points) do
+      [host|_] -> Cassandra.Connection.run_query(host, cql, options)
+      _        -> raise RuntimeError, ":contact_points option is missing"
+    end
   end
 
   defp exec(repo, cql, options, on_conflict \\ :error) do
     case exec_and_log(repo, cql, options) do
-      {:ok, :done} ->
+      %CQL.Result.Void{} ->
         {:ok, []}
-      {:ok, %{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]}} ->
+      %CQL.Result.Rows{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]} ->
         {:ok, []}
-      {:ok, %{rows_count: 1, rows: [[false | _]], columns: ["[applied]"|_]}} ->
+      %CQL.Result.Rows{rows_count: 1, rows: [[false | _]], columns: ["[applied]"|_]} ->
         if on_conflict == :nothing do
           {:ok, []}
         else
           {:error, :stale}
         end
-      {:error, {_, message}} ->
-        raise RuntimeError, message: message
-      {:error, reason} ->
-        raise RuntimeError, message: reason
+      %CQL.Error{} = error ->
+        raise error
     end
   end
 
   defp exec_and_log(repo, cql, options) do
-    {log, options} = Keyword.pop(options, :log, true)
-
-    profile = %{result: result} = repo.execute(cql, options)
-
-    if log do
-      entry = %Ecto.LogEntry{
-        query: cql,
-        params: Keyword.get(options, :values, []),
-        result: result,
-        query_time: Enum.sum(profile.query_times || []),
-        queue_time: Enum.sum(profile.queue_times || []),
-        connection_pid: hd(profile.connections || [nil]),
-      }
-
-      repo.__log__(entry)
+    if Keyword.get(options, :log, true) do
+      repo.execute(cql, Keyword.put(options, :log, &repo.__log__/1))
+    else
+      repo.execute(cql, options)
     end
-
-    result
   end
 end

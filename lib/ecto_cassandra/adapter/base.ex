@@ -85,7 +85,6 @@ defmodule EctoCassandra.Adapter.Base do
         |> Enum.map(fn {field, term} -> process.(field, term, nil) end)
       end
 
-      defp load_uuid(%Cassandra.UUID{value: value}), do: {:ok, value}
       defp load_uuid(value), do: {:ok, value}
 
       defp to_naive(%NaiveDateTime{} = datetime), do: {:ok, datetime}
