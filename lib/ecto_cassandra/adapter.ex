@@ -68,31 +68,27 @@ defmodule EctoCassandra.Adapter do
   ### Ecto.Adapter Callbacks ###
 
   @doc false
-  defmacro __before_compile__(env) do
-    config = Module.get_attribute(env.module, :config)
-    keyspace = Keyword.fetch!(config, :keyspace)
-
+  defmacro __before_compile__(_env) do
     quote do
-      defmodule Supervisor do
+      defmodule CassandraRepo do
         use Cassandra
       end
 
-      defdelegate execute(statement, options), to: Supervisor
+      defdelegate execute(statement, options), to: CassandraRepo
 
-      def __supervisor__, do: Supervisor
-      def __keyspace__, do: unquote(keyspace)
+      def __cassandra_repo__, do: CassandraRepo
     end
   end
 
   @doc false
   def child_spec(repo, options) do
     import Supervisor.Spec
-    supervisor(repo.__supervisor__, [options])
+    supervisor(repo.__cassandra_repo__, [options])
   end
 
   @doc false
   def ensure_all_started(_repo, _type) do
-    {:ok, []}
+    Application.ensure_all_started(:cassandra)
   end
 
   @doc false
