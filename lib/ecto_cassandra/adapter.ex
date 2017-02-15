@@ -17,8 +17,8 @@ defmodule EctoCassandra.Adapter do
 
   @doc false
   def execute_ddl(repo, definitions, options) do
+    options = Keyword.put(options, :on_coordinator, true)
     cql = EctoCassandra.ddl(definitions)
-    options = Keyword.put_new(options, :consistency, :all)
 
     case exec_and_log(repo, cql, options) do
       %CQL.Result.SchemaChange{} -> :ok
@@ -34,6 +34,8 @@ defmodule EctoCassandra.Adapter do
 
   @doc false
   def storage_up(options) do
+    options = Keyword.put(options, :on_coordinator, true)
+
     cql =
       options
       |> Keyword.put(:if_not_exists, true)
@@ -51,6 +53,8 @@ defmodule EctoCassandra.Adapter do
 
   @doc false
   def storage_down(options) do
+    options = Keyword.put(options, :on_coordinator, true)
+
     cql =
       options
       |> Keyword.put(:if_exists, true)
