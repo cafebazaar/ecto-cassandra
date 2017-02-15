@@ -11,6 +11,8 @@ defmodule EctoCassandra.Adapter do
   @behaviour Ecto.Adapter.Migration
   @behaviour Ecto.Adapter.Storage
 
+  @host_tries 3
+
   ### Ecto.Adapter.Migration Callbacks ###
 
   @doc false
@@ -42,7 +44,7 @@ defmodule EctoCassandra.Adapter do
         :ok
       %CQL.Result.Void{} ->
         {:error, :already_up}
-      %CQL.Error{} = error ->
+      error ->
         {:error, error}
     end
   end
@@ -59,7 +61,7 @@ defmodule EctoCassandra.Adapter do
         :ok
       %CQL.Result.Void{} ->
         {:error, :already_down}
-      %CQL.Error{} = error ->
+      error ->
         {:error, error}
     end
   end
@@ -129,9 +131,16 @@ defmodule EctoCassandra.Adapter do
   ### Helpers ###
 
   defp run_query(cql, options) do
-    case Keyword.get(options, :contact_points) do
-      [host|_] -> Cassandra.Connection.run_query(host, cql, options)
-      _        -> raise RuntimeError, ":contact_points option is missing"
+    options
+    |> Keyword.get(:contact_points, [])
+    |> List.duplicate(@host_tries)
+    |> List.flatten
+    |> Stream.map(&Cassandra.Connection.run_query(&1, cql, options))
+    |> Stream.reject(&match?({:error, %Cassandra.ConnectionError{}}, &1))
+    |> Enum.take(1)
+    |> case do
+      [result] -> result
+      []       -> raise RuntimeError, "connections refused"
     end
   end
 
