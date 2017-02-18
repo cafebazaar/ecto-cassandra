@@ -1,17 +1,22 @@
 language: elixir
-sudo: required
+sudo: false
 elixir:
   - 1.3.4
+  - 1.4.1
 otp_release:
   - 19.1.1
+  - 19.2
 addons:
   apt:
     packages:
       - oracle-java8-installer
+      - oracle-java8-set-default
+      - build-essential
 git:
   depth: 1
+env:
+  - MIX_ENV=test
 before_install:
-  - sudo update-java-alternatives -s java-8-oracle
   - export JAVA_HOME=/usr/lib/jvm/java-8-oracle
   - export MAX_HEAP_SIZE=128M
   - export HEAP_NEWSIZE=24M
