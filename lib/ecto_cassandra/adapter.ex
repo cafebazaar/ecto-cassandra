@@ -140,7 +140,7 @@ defmodule EctoCassandra.Adapter do
     |> List.duplicate(@host_tries)
     |> List.flatten
     |> Stream.map(&Cassandra.Connection.run_query(&1, cql, options))
-    |> Stream.reject(&match?({:error, %Cassandra.ConnectionError{}}, &1))
+    |> Stream.reject(&match?(%Cassandra.ConnectionError{}, &1))
     |> Enum.take(1)
     |> case do
       [result] -> result
