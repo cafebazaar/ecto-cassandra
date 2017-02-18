@@ -23,7 +23,7 @@ defmodule EctoCassandra.Adapter do
     case exec_and_log(repo, cql, options) do
       %CQL.Result.SchemaChange{} -> :ok
       %CQL.Result.Void{}         -> :ok
-      %CQL.Error{} = error       -> raise error
+      error                      -> raise error
     end
   end
 
@@ -47,7 +47,7 @@ defmodule EctoCassandra.Adapter do
       %CQL.Result.Void{} ->
         {:error, :already_up}
       error ->
-        {:error, error}
+        {:error, Exception.message(error)}
     end
   end
 
@@ -66,7 +66,7 @@ defmodule EctoCassandra.Adapter do
       %CQL.Result.Void{} ->
         {:error, :already_down}
       error ->
-        {:error, error}
+        {:error, Exception.message(error)}
     end
   end
 
@@ -104,7 +104,7 @@ defmodule EctoCassandra.Adapter do
       %CQL.Result.Rows{rows_count: count, rows: rows} ->
         {count, Enum.map(rows, &process_row(&1, fields, process))}
       %CQL.Result.Void{} -> :ok
-      %CQL.Error{} = error -> raise error
+      error              -> raise error
     end
   end
 
@@ -160,8 +160,7 @@ defmodule EctoCassandra.Adapter do
         else
           {:error, :stale}
         end
-      %CQL.Error{} = error ->
-        raise error
+      error -> raise error
     end
   end
 
