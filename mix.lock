@@ -1,4 +1,4 @@
-%{"cassandra": {:hex, :cassandra, "1.0.0-beta.3", "18464849ffb78a794f20eeb751dbef634063f0e5fdb18b9a8388cda20e45c757", [:make, :mix], [{:connection, "~> 1.0", [hex: :connection, optional: false]}, {:db_connection, "~> 1.1", [hex: :db_connection, optional: false]}, {:elixir_make, "~> 0.4", [hex: :elixir_make, optional: false]}, {:poolboy, "~> 1.5", [hex: :poolboy, optional: false]}, {:uuid, "~> 1.1", [hex: :uuid, optional: false]}]},
+%{"cassandra": {:git, "https://github.com/cafebazaar/elixir-cassandra.git", "8b6553bfdf185dc22dedd58dc037350a59306938", []},
   "certifi": {:hex, :certifi, "0.7.0", "861a57f3808f7eb0c2d1802afeaae0fa5de813b0df0979153cbafcd853ababaf", [:rebar3], []},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], []},
   "db_connection": {:hex, :db_connection, "1.1.0", "b2b88db6d7d12f99997b584d09fad98e560b817a20dab6a526830e339f54cdb3", [:mix], [{:connection, "~> 1.0.2", [hex: :connection, optional: false]}, {:poolboy, "~> 1.5", [hex: :poolboy, optional: true]}, {:sbroker, "~> 1.0", [hex: :sbroker, optional: true]}]},

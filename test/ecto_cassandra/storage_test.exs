@@ -18,6 +18,10 @@ defmodule EctoCassandra.StorageTest do
         CREATE KEYSPACE test
           WITH replication = {'class' : 'SimpleStrategy', 'replication_factor' : 1}
       """
+
+    assert_raise RuntimeError, ~r/:replication is nil/, fn ->
+      EctoCassandra.create_keyspace([keyspace: "test"])
+    end
   end
 
   test "drop keyspace", %{options: options} do

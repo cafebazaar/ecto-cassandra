@@ -23,10 +23,26 @@ defmodule EctoCassandra.Query do
     :varint,
   ]
 
+  @cassandra_keys [
+    :if,
+    :allow_filtering,
+    :using,
+  ]
+
   defmacro __using__([]) do
     quote do
-      import Ecto.Query
+      import Ecto.Query, except: [from: 1, from: 2]
       import EctoCassandra.Query
+    end
+  end
+
+  defmacro from(expr, kw \\ []) do
+    cassandra_kw = Keyword.take(kw, @cassandra_keys)
+    ecto_kw = Keyword.drop(kw, @cassandra_keys)
+    quote do
+      unquote(expr)
+      |> Ecto.Query.from(unquote(ecto_kw))
+      |> Map.merge(Enum.into(unquote(cassandra_kw), %{}))
     end
   end
 

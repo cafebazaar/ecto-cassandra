@@ -4,30 +4,31 @@ defmodule EctoCassandra.Adapter.Base do
   defmacro __using__(_) do
     quote do
       def prepare(type, query) do
-        {:cache, {:erlang.phash2(query), type, query}}
+        cql = apply(EctoCassandra, type, [query])
+        {:cache, {:erlang.phash2(query), type, cql}}
       end
 
-      def execute(repo, %{fields: fields}, {:cache, update, {hash, type, query}}, params, process, options) do
-        {cql, values, options} = apply(EctoCassandra, type, [query, options])
-        update.({hash, cql})
-        options = Keyword.put(options, :values, params ++ values)
-        [cql, options]
-      end
-
-      def execute(repo, _meta, {:cached, _reset, {_hash, cql}}, params, _process, options) do
+      def execute(repo, _meta, {:cache, update, {hash, type, cql}}, params, _process, options) do
+        update.({hash, type, cql})
         options = Keyword.put(options, :values, params)
         [cql, options]
       end
 
-      def execute(repo, %{fields: fields}, {:nocache, {_hash, type, query}}, params, process, options) do
-        {cql, options} = apply(EctoCassandra, type, [query, options])
+      def execute(repo, _meta, {:cached, _reset, {_hash, _type, cql}}, params, _process, options) do
         options = Keyword.put(options, :values, params)
         [cql, options]
       end
 
       def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
         types = schema.__schema__(:types)
-        {cql, options} = EctoCassandra.insert(prefix, source, fields, autogenerate, types, options)
+        {field_names, values} = Enum.unzip(fields)
+        {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
+        key = :erlang.phash2({prefix, source, field_names, autogenerate, types, query_options})
+        {:insert, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
+          cql = EctoCassandra.insert(prefix, source, fields, autogenerate, types, query_options)
+          {:ok, {:insert, cql}}
+        end
+        options = Keyword.put(options, :values, values)
         [repo, cql, options, on_conflict]
       end
 
@@ -36,18 +37,33 @@ defmodule EctoCassandra.Adapter.Base do
         header = header -- [auto_column]
         fields = Enum.zip(header, Stream.cycle([nil]))
         types = schema.__schema__(:types)
-        {cql, options} = EctoCassandra.insert(prefix, source, fields, [autogenerate], types, options)
+        cql = EctoCassandra.insert(prefix, source, fields, [autogenerate], types, options)
         [repo, {cql, list}, options, on_conflict]
       end
 
       def update(repo, %{source: {prefix, source}, schema: schema}, fields, filters, [], options) do
         types = schema.__schema__(:types)
-        {cql, options} = EctoCassandra.update(prefix, source, fields, filters, types, options)
+        {field_names, values} = Enum.unzip(fields)
+        {filters, filter_values} = Enum.unzip(filters)
+        {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
+        key = :erlang.phash2({prefix, source, field_names, filters, types, query_options})
+        {:update, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
+          cql = EctoCassandra.update(prefix, source, fields, filters, types, query_options)
+          {:ok, {:update, cql}}
+        end
+        options = Keyword.put(options, :values, values ++ filter_values)
         [repo, cql, options]
       end
 
       def delete(repo, %{source: {prefix, source}}, filters, options) do
-        {cql, options} = EctoCassandra.delete(prefix, source, filters, options)
+        {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
+        {filters, filter_values} = Enum.unzip(filters)
+        key = :erlang.phash2({prefix, source, filters, query_options})
+        {:delete, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
+          cql = EctoCassandra.delete(prefix, source, filters, query_options)
+          {:ok, {:delete, cql}}
+        end
+        options = Keyword.put(options, :values, filter_values)
         [repo, cql, options]
       end
 

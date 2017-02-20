@@ -27,7 +27,7 @@ defmodule EctoCassandra.Mixfile do
 
   defp deps, do: [
     {:ecto, "~> 2.1.0-rc.3"},
-    {:cassandra, "~> 1.0.0-beta.3"},
+    {:cassandra, github: "cafebazaar/elixir-cassandra"},
     {:excoveralls, "~> 0.5", only: :test},
   ]
 

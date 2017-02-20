@@ -5,7 +5,6 @@ defmodule EctoCassandra do
 
   alias Ecto.Migration.{Table, Index, Reference}
 
-  @index_name ~r/^[a-zA-Z_0-9]+$/
   @identifier ~r/^[a-zA-Z][a-zA-Z0-9_]*$/
   @unquoted_name ~r/^[a-zA-Z_0-9]{1,48}$/
   @binary_operators_map %{
@@ -21,13 +20,8 @@ defmodule EctoCassandra do
 
   ### API ###
 
-  def to_cql(query, operation, options \\ []) do
-    {cql, values,  _} = apply(__MODULE__, operation, [query, options])
-    {cql, values}
-  end
-
-  def all(query, options \\ []) do
-    {query, values} = assemble [
+  def all(query) do
+    IO.iodata_to_binary [
       select(query),
       from(query),
       where(query),
@@ -36,90 +30,53 @@ defmodule EctoCassandra do
       limit(query),
       lock(query),
     ]
-
-    {query, values, options}
   end
 
-  def delete_all(query, options) do
+  def delete_all(query) do
     table = table_name(query)
-    {query, values} = case where(query) do
-      [] ->
-        assemble ["TRUNCATE ", table]
-      where ->
-        assemble ["DELETE FROM ",
+    parts =
+      case where(query) do
+        []    -> ["TRUNCATE ", table]
+        where -> [
+          "DELETE FROM ",
           table,
           where,
-          only_when(options[:if] == :exists, " IF EXISTS "),
-          using(options[:ttl], options[:timestamp]),
+          only_when(Map.get(query, :if) == :exists, " IF EXISTS"),
+          using(Map.get(query, :using, [])),
         ]
-    end
+      end
 
-    options = Keyword.drop(options, [:if, :ttl, :timestamp])
-
-    {query, values, options}
+    IO.iodata_to_binary(parts)
   end
 
-  def update_all(query, options) do
+  def update_all(query) do
     where = where(query)
-    if where == [], do: raise ArgumentError, "Cassandra requires where caluse for update"
+    if where == [], do: raise ArgumentError, "Cassandra requires where clause for update"
 
-    {query, values} = assemble [
+    IO.iodata_to_binary [
       "UPDATE ",
       table_name(query),
-      using(options[:ttl], options[:timestamp]),
+      using(Map.get(query, :using, [])),
       update_fields(query),
       where,
-      only_when(options[:if] == :exists, " IF EXISTS"),
+      only_when(Map.get(query, :if) == :exists, " IF EXISTS"),
     ]
-
-    options = Keyword.drop(options, [:if, :ttl, :timestamp])
-
-    {query, values, options}
-  end
-
-  defp update_fields(%{updates: updates} = query) do
-    fields = for %{expr: expr} <- updates,
-      {op, kw} <- expr,
-      {key, value} <- kw
-    do
-      update_op(op, key, value, query)
-    end
-    [" SET " | Enum.intersperse(fields, ", ")]
-  end
-
-  defp update_op(op, key, value, query) do
-    field = identifier(key)
-    value = expr(value, query)
-    case op do
-      :set  -> assemble [field, " = ", value]
-      :inc  -> assemble [field, " = ", field, " + ", value]
-      :push -> assemble [field, " = ", field, " + ", "[", value, "]"]
-      :pull -> assemble [field, " = ", field, " - ", "[", value, "]"]
-      other -> error!(query, "Unknown update operation #{inspect other} for Cassandra")
-    end
   end
 
   def insert(prefix, source, fields, autogenerate, types, options) do
-    {query, values} = assemble [
+    IO.iodata_to_binary [
       "INSERT INTO ",
       table_name(prefix, source),
       values(autogenerate, fields, types),
       only_when(options[:if] == :not_exists, " IF NOT EXISTS"),
       using(options[:ttl], options[:timestamp]),
     ]
-
-    options =
-      options
-      |> Keyword.drop([:if, :ttl, :timestamp])
-      |> Keyword.put(:values, values)
-
-    {query, options}
   end
 
   def update(prefix, source, fields, filters, types, options) do
     # TODO: support IF conditions
 
-    {query, values} = assemble [
+    IO.iodata_to_binary [
       "UPDATE ",
       table_name(prefix, source),
       using(options[:ttl], options[:timestamp]),
@@ -127,72 +84,55 @@ defmodule EctoCassandra do
       where(filters),
       only_when(options[:if] == :exists, " IF EXISTS"),
     ]
-
-    options =
-      options
-      |> Keyword.drop([:if, :ttl, :timestamp])
-      |> Keyword.put(:values, values)
-
-    {query, options}
   end
 
   def delete(prefix, source, filters, options) do
     # TODO: support IF conditions
 
-    {query, values} = assemble [
+    IO.iodata_to_binary [
       "DELETE FROM ",
       table_name(prefix, source),
       using(options[:ttl], options[:timestamp]),
       where(filters),
       only_when(options[:if] == :exists, " IF EXISTS"),
     ]
-
-    options =
-      options
-      |> Keyword.drop([:if, :ttl, :timestamp])
-      |> Keyword.put(:values, values)
-
-    {query, options}
   end
 
   def ddl({command, %Table{} = table, columns})
   when command in [:create, :create_if_not_exists]
   do
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "CREATE TABLE ",
-      only_when(command == :create_if_not_exists, " IF NOT EXISTS "),
+      only_when(command == :create_if_not_exists, "IF NOT EXISTS "),
       table_name(table.prefix, table.name),
       column_definitions(columns),
       table_options(table),
     ]
-    query
   end
 
   def ddl({command, %Table{} = table})
   when command in [:drop, :drop_if_exists]
   do
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "DROP TABLE ",
       only_when(command == :drop_if_exists, "IF EXISTS "),
       table_name(table.prefix, table.name),
     ]
-    query
   end
 
   def ddl({:alter, %Table{} = table, columns}) do
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "ALTER TABLE ",
       table_name(table.prefix, table.name),
       column_changes(columns),
       table_options(table),
     ]
-    query
   end
 
   def ddl({command, %Index{} = index})
   when command in [:create, :create_if_not_exists]
   do
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "CREATE ",
       only_when(index.using, "CUSTOM "),
       "INDEX ",
@@ -203,18 +143,16 @@ defmodule EctoCassandra do
       index_identifiers(index),
       only_when(index.using, " USING #{index.using}"),
     ]
-    query
   end
 
   def ddl({command, %Index{} = index})
   when command in [:drop, :drop_if_exists]
   do
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "DROP INDEX ",
-      only_when(command == :drop_if_exists, " IF EXISTS"),
+      only_when(command == :drop_if_exists, "IF EXISTS "),
       index_name(index.name),
     ]
-    query
   end
 
   def create_keyspace(options) do
@@ -225,7 +163,7 @@ defmodule EctoCassandra do
       |> Keyword.get(:replication, [])
       |> map
 
-    if replication == "" do
+    if replication == ["{", "", "}"] do
       raise ":replication is nil in repository configuration"
     end
 
@@ -236,31 +174,27 @@ defmodule EctoCassandra do
       _   -> [replication, " AND durable_writes = ", durable_writes]
     end
 
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "CREATE KEYSPACE ",
-      only_when(options[:if_not_exists], " IF NOT EXISTS "),
+      only_when(options[:if_not_exists], "IF NOT EXISTS "),
       keyspace,
       " WITH replication = ",
       with_cluse,
     ]
-
-    query
   end
 
   def drop_keyspace(options) do
     keyspace = Keyword.fetch!(options, :keyspace) || raise ":keyspace is nil in repository configuration"
 
-    {query, []} = assemble [
+    IO.iodata_to_binary [
       "DROP KEYSPACE ",
       only_when(options[:if_exists], " IF EXISTS "),
       keyspace,
     ]
-
-    query
   end
 
   def batch(queries, options) do
-    {query, values} = assemble [
+    IO.iodata_to_binary [
       "BEGIN ",
       only_when(options[:type] == :unlogged, "UNLOGGED "),
       only_when(options[:type] == :counter, "COUNTER "),
@@ -269,10 +203,6 @@ defmodule EctoCassandra do
       Enum.join(queries, ";\n  "),
       "\nAPPLY BATCH",
     ]
-
-    options = Keyword.drop(options, [:ttl, :timestamp])
-
-    {query, values, options}
   end
 
   ### Helpers ###
@@ -288,9 +218,31 @@ defmodule EctoCassandra do
     [" (", Enum.intersperse(names, ", "), ") VALUES (", Enum.intersperse(values, ", "), ")"]
   end
 
-  defp value(nil, :binary_id),  do: "now()"
-  defp value(nil, :id), do: "uuid()"
-  defp value(value, _), do: {"?", [value]}
+  defp value(nil, :binary_id), do: "now()"
+  defp value(nil, :id),        do: "uuid()"
+  defp value(_, _),            do: "?"
+
+  defp update_fields(%{updates: updates} = query) do
+    fields =
+      for %{expr: expr} <- updates,
+          {op, kw}      <- expr,
+          {key, value}  <- kw
+      do
+        update_op(op, key, value, query)
+      end
+    [" SET " | Enum.intersperse(fields, ", ")]
+  end
+
+  defp update_op(op, key, value, query) do
+    field = identifier(key)
+    value = expr(value, query)
+    case op do
+      :set  -> [field, " = ", value]
+      :inc  -> [field, " = ", field, " + ", value]
+      :push -> [field, " = ", field, " + ", "[", value, "]"]
+      :pull -> [field, " = ", field, " - ", "[", value, "]"]
+    end
+  end
 
   defp set(fields, types) do
     sets =
@@ -310,13 +262,12 @@ defmodule EctoCassandra do
   end
 
   defp where(filters) when is_list(filters) do
-    {fields, values} = Enum.unzip(filters)
     conditions =
-      fields
+      filters
       |> Enum.map(&[identifier(&1), " = ?"])
       |> Enum.intersperse(" AND ")
 
-    {[" WHERE " | conditions], values}
+    [" WHERE " | conditions]
   end
 
   defp where(%{wheres: []}), do: []
@@ -359,10 +310,11 @@ defmodule EctoCassandra do
   defp lock(%{lock: "ALLOW FILTERING"}),  do: " ALLOW FILTERING"
   defp lock(query), do: support_error!(query, "locking")
 
+  defp using(options),        do: using(options[:ttl], options[:timestamp])
   defp using(nil, nil),       do: []
-  defp using(ttl, nil),       do: {" USING TTL ?", [ttl]}
-  defp using(nil, timestamp), do: {" USING TIMESTAMP ?", [timestamp]}
-  defp using(ttl, timestamp), do: {" USING TTL ? AND TIMESTAMP ?", [ttl, timestamp]}
+  defp using(ttl, nil),       do: " USING TTL #{ttl}"
+  defp using(nil, timestamp), do: " USING TIMESTAMP #{timestamp}"
+  defp using(ttl, timestamp), do: " USING TTL #{ttl} AND TIMESTAMP #{timestamp}"
 
   defp only_when(true, a), do: a
   defp only_when(false, _), do: []
@@ -376,10 +328,6 @@ defmodule EctoCassandra do
       end
 
     Enum.intersperse(relations, " AND ")
-  end
-
-  defp select_fields([], query) do
-    error!(query, "bad select clause")
   end
 
   defp select_fields(fields, query) do
@@ -406,17 +354,8 @@ defmodule EctoCassandra do
     end
   end
 
-  defp index_name(name) when is_atom(name) do
-    name |> Atom.to_string |> index_name
-  end
-
-  defp index_name(name) do
-    if Regex.match?(@index_name, name) do
-      name
-    else
-      raise ArgumentError, "bad index name #{inspect name}"
-    end
-  end
+  defp index_name(name) when is_atom(name), do: Atom.to_string(name)
+  defp index_name(name), do: name
 
   defp table_name(%{from: {table, _schema}, prefix: prefix}) do
     table_name(prefix, table)
@@ -437,35 +376,6 @@ defmodule EctoCassandra do
   defp table_name(nil, name),    do: table_name(name)
   defp table_name(prefix, name), do: [table_name(prefix), ".", table_name(name)]
 
-  defp assemble(list) when is_list(list) do
-    assemble(list, [], [])
-  end
-
-  defp assemble({part, values}) do
-    {p, v} = assemble(part)
-    {p, [v | values]}
-  end
-
-  defp assemble(part) do
-    {part, []}
-  end
-
-  defp assemble([{p, v} | rest], parts, values) do
-    {pp, pv} = assemble(p)
-    assemble(rest, [pp | parts], [v, pv | values])
-  end
-
-  defp assemble([p | rest], parts, values) do
-    {pp, pv} = assemble(p)
-    assemble(rest, [pp | parts], [pv | values])
-  end
-
-  defp assemble([], parts, values) do
-    query = parts |> Enum.reverse |> IO.iodata_to_binary |> String.trim_trailing
-    values = values |> Enum.reverse |> Enum.concat
-    {query, values}
-  end
-
   Enum.map @binary_operators_map, fn {op, term} ->
     defp call_type(unquote(op), 2), do: {:binary_operator, unquote(term)}
   end
@@ -485,7 +395,7 @@ defmodule EctoCassandra do
   end
 
   defp expr({:in, _, [left, right]}, query) do
-    assemble [expr(left, query), " IN ", expr(right, query)]
+    [expr(left, query), " IN ", expr(right, query)]
   end
 
   defp expr({:is_nil, _, _}, query) do
@@ -545,11 +455,10 @@ defmodule EctoCassandra do
        is_integer(value) or
        is_float(value)
   do
-    {"?", [value]}
+    primitive(value)
   end
 
   defp primitive(value, :string), do: quote_string(value, false)
-  defp primitive(value, _), do: primitive(value)
 
   defp primitive(nil),   do: "NULL"
   defp primitive(true),  do: "TRUE"
@@ -679,7 +588,7 @@ defmodule EctoCassandra do
   end
 
   defp column_definition({:add, name, type, options}) do
-    assemble [
+    [
       identifier(name),
       " ",
       column_type(type),

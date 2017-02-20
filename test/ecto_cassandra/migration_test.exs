@@ -233,9 +233,7 @@ defmodule EctoCassandra.MigrationTest do
 
   test "drop index" do
     create = {:drop, index(:posts, [:category_id])}
-    assert cql(create) == join """
-        DROP INDEX posts_category_id_index
-      """
+    assert cql(create) == join "DROP INDEX posts_category_id_index"
   end
 
   test "drop index with prefix" do
