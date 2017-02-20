@@ -96,25 +96,4 @@ defmodule EctoCassandra.Query do
   defmacro contains(field, value) do
     quote do: fragment("? CONTAINS ?", unquote(field), unquote(value))
   end
-
-  @doc """
-  Be aware that batches are often mistakenly used in an attempt to optimize performance.
-
-  Refere to http://docs.datastax.com/en/cql/3.1/cql/cql_using/useBatch.html
-  """
-  defmacro batch(repo, options \\ [], [do: {:__block__, _, statements}]) do
-    quote do: EctoCassandra.Batch.batch(unquote(repo), unquote(options), unquote(statements))
-  end
-
-  defmacro insert(struct, options \\ []) do
-    quote do: {:insert, unquote(struct), unquote(options)}
-  end
-
-  defmacro update(struct, options \\ []) do
-    quote do: {:update, unquote(struct), unquote(options)}
-  end
-
-  defmacro delete(struct, options \\ []) do
-    quote do: {:delete, unquote(struct), unquote(options)}
-  end
 end
