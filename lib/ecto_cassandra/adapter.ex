@@ -166,9 +166,38 @@ defmodule EctoCassandra.Adapter do
 
   defp exec_and_log(repo, cql, options) do
     if Keyword.get(options, :log, true) do
-      repo.execute(cql, Keyword.put(options, :log, &repo.__log__/1))
+      repo.execute(cql, Keyword.put(options, :log, &log(repo, cql, &1)))
     else
-      repo.execute(cql, options)
+      repo.execute(cql, Keyword.delete(options, :log))
     end
   end
+
+  defp log(repo, cql, entry) do
+    %{connection_time: query_time,
+      decode_time: decode_time,
+      pool_time: queue_time,
+      result: result,
+      query: query,
+    } = entry
+
+    repo.__log__(%Ecto.LogEntry{
+      query_time: query_time,
+      decode_time: decode_time,
+      queue_time: queue_time,
+      result: log_result(result),
+      params: Map.get(query, :values, []),
+      query: String.Chars.to_string(cql),
+      ansi_color: cql_color(cql),
+    })
+  end
+
+  defp log_result({:ok, _query, res}), do: {:ok, res}
+  defp log_result(other), do: other
+
+  defp cql_color("SELECT" <> _), do: :cyan
+  defp cql_color("INSERT" <> _), do: :green
+  defp cql_color("UPDATE" <> _), do: :yellow
+  defp cql_color("DELETE" <> _), do: :red
+  defp cql_color("TRUNC" <> _), do: :red
+  defp cql_color(_), do: nil
 end
