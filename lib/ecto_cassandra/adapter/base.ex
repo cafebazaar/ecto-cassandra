@@ -19,6 +19,11 @@ defmodule EctoCassandra.Adapter.Base do
         [cql, options]
       end
 
+      def execute(repo, _meta, {:nocache, {_hash, _type, cql}}, params, _process, options) do
+        options = Keyword.put(options, :values, params)
+        [cql, options]
+      end
+
       def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
         types = schema.__schema__(:types)
         {field_names, values} = Enum.unzip(fields)
