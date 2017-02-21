@@ -237,6 +237,16 @@ defmodule EctoCassandra.AdapterTest do
     |> where([u], u.age in [1, 2, 20])
     |> select([:id])
     |> assert_cql("SELECT id FROM users WHERE age IN (1, 2, 20)")
+
+    User
+    |> where([u], u.name == ^"Jack" and u.age in ^[1, 2, 20])
+    |> select([:id])
+    |> assert_cql("SELECT id FROM users WHERE name = ? AND age IN (?, ?, ?)")
+
+    User
+    |> where([u], u.name in ^["Jack", "John"] and u.age < ^100)
+    |> select([:id])
+    |> assert_cql("SELECT id FROM users WHERE name IN (?, ?) AND age < ?")
   end
 
   test "fragments allow ? to be escaped with backslash" do

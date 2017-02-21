@@ -383,6 +383,14 @@ defmodule EctoCassandra do
   defp call_type(func, _arity), do: {:func, Atom.to_string(func)}
 
   defp expr({:^, [], [_]}, _query), do: "?"
+  defp expr({:^, [], [_index, count]}, _query) do
+    marks =
+      1..count
+      |> Enum.map(fn _ -> "?" end)
+      |> Enum.intersperse(", ")
+
+    ["(", marks, ")"]
+  end
 
   defp expr({{:., _, [{:&, _, [_]}, field]}, _, []}, _query) when is_atom(field) do
     identifier(field)
