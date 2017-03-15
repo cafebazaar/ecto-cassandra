@@ -34,7 +34,7 @@ defmodule Sample.Repo.Migrations.CreateUser do
       add :email, :string
       add :password_hash, :string
 
-      timestamps
+      timestamps()
     end
   end
 end
