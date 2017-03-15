@@ -614,6 +614,7 @@ defmodule EctoCassandra do
     do: "LIST<#{column_type(type)}>"
   defp column_type({:set, type}),
     do: "SET<#{column_type(type)}>"
+  defp column_type(:serial),         do: "uuid"
   defp column_type(:id),             do: "uuid"
   defp column_type(:binary_id),      do: "timeuuid"
   defp column_type(:uuid),           do: "uuid"

@@ -2,6 +2,8 @@ defmodule EctoCassandra.Integration.Migration do
   use Ecto.Migration
 
   def change do
+    create table(:test_primary_key)
+
     create table(:users, comment: "users table", primary_key: false) do
       add :id, :uuid, partition_key: true
       add :name, :text

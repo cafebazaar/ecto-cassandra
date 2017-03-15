@@ -26,6 +26,16 @@ defmodule EctoCassandra.MigrationTest do
       """
   end
 
+  test "create table with serial primary_key" do
+    create = {:create, table(:posts), [
+      {:add, :id, :serial, [partition_key: true]},
+    ]}
+
+    assert cql(create) == join "
+      CREATE TABLE posts (id uuid, PRIMARY KEY (id))
+    "
+  end
+
   test "create table with prefix" do
     create = {:create, table(:posts, prefix: :foo), [
       {:add, :id, :id, [partition_key: true]},
