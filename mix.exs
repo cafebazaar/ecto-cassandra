@@ -22,12 +22,12 @@ defmodule EctoCassandra.Mixfile do
   ]
 
   def application, do: [
-    applications: [:logger],
+    applications: [:logger, :cassandra],
   ]
 
   defp deps, do: [
     {:ecto, "~> 2.1"},
-    {:cassandra, "~> 1.0.0-beta.4"},
+    {:cassandra, "~> 1.0.0-beta.5"},
     {:excoveralls, "~> 0.6", only: :test},
     {:ex_doc, ">= 0.0.0", only: :dev},
   ]
