@@ -610,6 +610,8 @@ defmodule EctoCassandra do
     do: "MAP<text, #{column_type(type)}>"
   defp column_type(:map),
     do: "MAP<text, text>"
+  defp column_type({:frozen, type}),
+    do: "frozen<#{column_type(type)}>"
   defp column_type({:array, type}),
     do: "LIST<#{column_type(type)}>"
   defp column_type({:set, type}),

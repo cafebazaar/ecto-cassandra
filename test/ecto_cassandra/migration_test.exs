@@ -12,6 +12,7 @@ defmodule EctoCassandra.MigrationTest do
       {:add, :published_at, :timestamp, []},
       {:add, :is_active, :boolean, []},
       {:add, :tags, {:array, :string}, []},
+      {:add, :reservations, {:frozen, {:array, :integer}}, []}
     ]}
 
     assert cql(create) == join """
@@ -22,6 +23,7 @@ defmodule EctoCassandra.MigrationTest do
         published_at timestamp,
         is_active boolean,
         tags LIST<text>,
+        reservations frozen<LIST<int>>,
         PRIMARY KEY (id))
       """
   end
