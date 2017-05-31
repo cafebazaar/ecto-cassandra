@@ -29,7 +29,7 @@ defmodule Sample.Repo.Migrations.CreateUser do
   def change do
     create table(:users, primary_key: false) do
       add :id, :id, partition_key: true
-      add :age, :integer, clustring_column: true
+      add :age, :integer, clustering_column: true
       add :name, :string
       add :email, :string
       add :password_hash, :string
