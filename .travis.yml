@@ -1,11 +1,11 @@
 language: elixir
 sudo: false
 elixir:
-  - 1.4.0
-  - 1.4.1
+  - 1.4
+  - 1.5
 otp_release:
-  - 19.1.1
-  - 19.2
+  - 19.3
+  - 20.0
 addons:
   apt:
     packages:
@@ -21,7 +21,7 @@ before_install:
   - export MAX_HEAP_SIZE=128M
   - export HEAP_NEWSIZE=24M
   - java -version
-  - wget http://www-us.apache.org/dist/cassandra/3.10/apache-cassandra-3.10-bin.tar.gz
+  - wget http://archive.apache.org/dist/cassandra/3.10/apache-cassandra-3.10-bin.tar.gz
   - tar -xzf apache-cassandra-3.10-bin.tar.gz
   - sh ./apache-cassandra-3.10/bin/cassandra 2>&1 >/dev/null
 script: mix coveralls.travis
