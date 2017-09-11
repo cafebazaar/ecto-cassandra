@@ -152,14 +152,14 @@ defmodule EctoCassandra.Adapter do
     case exec_and_log(repo, cql, options) do
       %CQL.Result.Void{} ->
         {:ok, []}
-      %CQL.Result.Rows{rows_count: 1, rows: [[true | _]], columns: ["[applied]"|_]} ->
-        {:ok, []}
       %CQL.Result.Rows{rows_count: 1, rows: [[false | _]], columns: ["[applied]"|_]} ->
         if on_conflict == :nothing do
           {:ok, []}
         else
           {:error, :stale}
         end
+      %CQL.Result.Rows{} ->
+        {:ok, []}
       error -> raise error
     end
   end
