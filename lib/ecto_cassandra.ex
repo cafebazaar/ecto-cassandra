@@ -69,7 +69,7 @@ defmodule EctoCassandra do
       table_name(prefix, source),
       values(autogenerate, fields, types),
       only_when(options[:if] == :not_exists, " IF NOT EXISTS"),
-      using(options[:ttl], options[:timestamp]),
+      using(options[:using][:ttl], options[:using][:timestamp]),
     ]
   end
 
@@ -79,7 +79,7 @@ defmodule EctoCassandra do
     IO.iodata_to_binary [
       "UPDATE ",
       table_name(prefix, source),
-      using(options[:ttl], options[:timestamp]),
+      using(options[:using][:ttl], options[:using][:timestamp]),
       set(fields, types),
       where(filters),
       only_when(options[:if] == :exists, " IF EXISTS"),
@@ -92,7 +92,7 @@ defmodule EctoCassandra do
     IO.iodata_to_binary [
       "DELETE FROM ",
       table_name(prefix, source),
-      using(options[:ttl], options[:timestamp]),
+      using(options[:using][:ttl], options[:using][:timestamp]),
       where(filters),
       only_when(options[:if] == :exists, " IF EXISTS"),
     ]
@@ -199,7 +199,7 @@ defmodule EctoCassandra do
       only_when(options[:type] == :unlogged, "UNLOGGED "),
       only_when(options[:type] == :counter, "COUNTER "),
       "BATCH\n  ",
-      using(options[:ttl], options[:timestamp]),
+      using(options[:using][:ttl], options[:using][:timestamp]),
       Enum.join(queries, ";\n  "),
       "\nAPPLY BATCH",
     ]
