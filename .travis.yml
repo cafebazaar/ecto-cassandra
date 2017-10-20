@@ -1,5 +1,7 @@
 language: elixir
-sudo: false
+sudo: true
+services:
+  - cassandra
 elixir:
   - 1.4
   - 1.5
@@ -9,19 +11,9 @@ otp_release:
 addons:
   apt:
     packages:
-      - oracle-java8-installer
-      - oracle-java8-set-default
       - build-essential
 git:
   depth: 1
 env:
   - MIX_ENV=test
-before_install:
-  - export JAVA_HOME=/usr/lib/jvm/java-8-oracle
-  - export MAX_HEAP_SIZE=128M
-  - export HEAP_NEWSIZE=24M
-  - java -version
-  - wget http://archive.apache.org/dist/cassandra/3.11.1/apache-cassandra-3.11.1-bin.tar.gz
-  - tar -xzf apache-cassandra-3.11.1-bin.tar.gz
-  - sh ./apache-cassandra-3.11.1/bin/cassandra 2>&1 >/dev/null
 script: mix coveralls.travis
