@@ -4,29 +4,26 @@ defmodule EctoCassandra.INet do
   def type, do: :inet
 
   def cast({_, _, _, _} = ip), do: {:ok, ip}
-  def cast({_, _, _, _, _, _} = ip), do: {:ok, ip}
+  def cast({_, _, _, _, _, _, _, _} = ip), do: {:ok, ip}
 
   def cast(ip) when is_binary(ip) do
-    case String.split(ip, ".") do
-      list when is_list(list) and length(list) == 4 ->
-        {:ok, List.to_tuple(list)}
-      _ ->
-        case String.split(ip, ":") do
-          list when is_list(list) and length(list) == 6 ->
-            {:ok, List.to_tuple(list)}
-          _ ->
-            :error
-        end
+    cast(String.to_charlist(ip))
+  end
+
+  def cast(ip) when is_list(ip) do
+    case :inet_parse.address(ip) do
+      {:ok, ip} -> {:ok, ip}
+      _         -> :error
     end
   end
 
   def cast(_), do: :error
 
   def load({_, _, _, _} = ip), do: {:ok, ip}
-  def load({_, _, _, _, _, _} = ip), do: {:ok, ip}
+  def load({_, _, _, _, _, _, _, _} = ip), do: {:ok, ip}
   def load(_), do: :error
 
   def dump({_, _, _, _} = ip), do: {:ok, ip}
-  def dump({_, _, _, _, _, _} = ip), do: {:ok, ip}
+  def dump({_, _, _, _, _, _, _, _} = ip), do: {:ok, ip}
   def dump(_), do: :error
 end
