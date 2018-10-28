@@ -5,7 +5,8 @@ defmodule EctoCassandra.Adapter.Base do
     quote do
       def prepare(type, query) do
         cql = apply(EctoCassandra, type, [query])
-        {:cache, {:erlang.phash2(query), type, cql}}
+        # {:cache, {:erlang.phash2(query), type, cql}}
+        {:nocache, {query, type, cql}}
       end
 
       def execute(repo, _meta, {:cache, update, {hash, type, cql}}, params, _process, options) do
@@ -26,13 +27,9 @@ defmodule EctoCassandra.Adapter.Base do
 
       def insert(repo, %{source: {prefix, source}, schema: schema}, fields, on_conflict, autogenerate, options) do
         types = schema.__schema__(:types)
-        {field_names, values} = Enum.unzip(fields)
+        {_field_names, values} = Enum.unzip(fields)
         {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
-        key = :erlang.phash2({prefix, source, field_names, autogenerate, types, query_options})
-        {:insert, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
-          cql = EctoCassandra.insert(prefix, source, fields, autogenerate, types, query_options)
-          {:ok, {:insert, cql}}
-        end
+        cql = EctoCassandra.insert(prefix, source, fields, autogenerate, types, query_options)
         options = Keyword.put(options, :values, values)
         [repo, cql, options, on_conflict]
       end
@@ -48,14 +45,10 @@ defmodule EctoCassandra.Adapter.Base do
 
       def update(repo, %{source: {prefix, source}, schema: schema}, fields, filters, [], options) do
         types = schema.__schema__(:types)
-        {field_names, values} = Enum.unzip(fields)
+        {_field_names, values} = Enum.unzip(fields)
         {filters, filter_values} = Enum.unzip(filters)
         {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
-        key = :erlang.phash2({prefix, source, field_names, filters, types, query_options})
-        {:update, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
-          cql = EctoCassandra.update(prefix, source, fields, filters, types, query_options)
-          {:ok, {:update, cql}}
-        end
+        cql = EctoCassandra.update(prefix, source, fields, filters, types, query_options)
         options = Keyword.put(options, :values, values ++ filter_values)
         [repo, cql, options]
       end
@@ -63,11 +56,7 @@ defmodule EctoCassandra.Adapter.Base do
       def delete(repo, %{source: {prefix, source}}, filters, options) do
         {query_options, options} = Enum.split_with(options, fn {key, _} -> key in [:if, :using] end)
         {filters, filter_values} = Enum.unzip(filters)
-        key = :erlang.phash2({prefix, source, filters, query_options})
-        {:delete, cql} = Cassandra.Cache.put_new_lazy repo, key, fn ->
-          cql = EctoCassandra.delete(prefix, source, filters, query_options)
-          {:ok, {:delete, cql}}
-        end
+        cql = EctoCassandra.delete(prefix, source, filters, query_options)
         options = Keyword.put(options, :values, filter_values)
         [repo, cql, options]
       end
